@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5A2480"/>
+      <stop offset="0.55" stop-color="#4B1D6E"/>
+      <stop offset="1" stop-color="#2F1248"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="38" y1="12" x2="56" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8C547"/>
+      <stop offset="1" stop-color="#C9A227"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Soft L shadow -->
+  <path
+    d="M22 12c8 1 13 5 14 12 1 6-1 11-5 15-3 3-8 5-13 5"
+    fill="none"
+    stroke="#9B7BB8"
+    stroke-width="7"
+    stroke-linecap="round"
+    opacity=".45"
+    transform="translate(-1.5 1.5)"
+  />
+  <path
+    d="M18 37c8 0 14 3 17 8"
+    fill="none"
+    stroke="#9B7BB8"
+    stroke-width="7"
+    stroke-linecap="round"
+    opacity=".45"
+    transform="translate(-1.5 1.5)"
+  />
+  <!-- Script L -->
+  <path
+    d="M22 12c8 1 13 5 14 12 1 6-1 11-5 15-3 3-8 5-13 5"
+    fill="none"
+    stroke="#F7F0FF"
+    stroke-width="7"
+    stroke-linecap="round"
+  />
+  <path
+    d="M18 37c8 0 14 3 17 8"
+    fill="none"
+    stroke="#F7F0FF"
+    stroke-width="7"
+    stroke-linecap="round"
+  />
+  <!-- Gold chain links -->
+  <g fill="none" stroke="url(#gold)" stroke-width="2.6" stroke-linecap="round">
+    <ellipse cx="46" cy="18" rx="6" ry="3.4" transform="rotate(-38 46 18)"/>
+    <ellipse cx="52" cy="24" rx="6" ry="3.4" transform="rotate(-38 52 24)"/>
+  </g>
+</svg>

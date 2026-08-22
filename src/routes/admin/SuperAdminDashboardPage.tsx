@@ -1,0 +1,498 @@
+import { Link } from '@tanstack/react-router'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Building2,
+  Clock3,
+  CreditCard,
+  FileText,
+  LoaderCircle,
+} from 'lucide-react'
+import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
+import { superAdminDashboardService } from '@/services/superAdminDashboardService'
+import type {
+  DashboardBillStatus,
+  DashboardRecentBill,
+  DashboardTopMerchant,
+  DashboardVolumePoint,
+} from '@/types/dashboard'
+import { cn } from '@/lib/utils'
+
+function CollectionVolumeChart({
+  points,
+}: {
+  points: DashboardVolumePoint[]
+}) {
+  const width = 560
+  const height = 220
+  const padX = 16
+  const padY = 20
+  const data = points.length > 0 ? points : [{ key: 'empty', label: '—', value: 0 }]
+  const max = Math.max(...data.map((p) => p.value), 1)
+  const step = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0
+
+  const coords = data.map((point, index) => {
+    const x = padX + index * step
+    const y = height - padY - (point.value / max) * (height - padY * 2)
+    return { x, y, ...point }
+  })
+
+  const line = coords
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+    .join(' ')
+  const area = `${line} L ${coords.at(-1)!.x.toFixed(1)} ${height - padY} L ${coords[0]!.x.toFixed(1)} ${height - padY} Z`
+
+  return (
+    <div className="w-full overflow-hidden">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-56 w-full"
+        role="img"
+        aria-label="Collection volume chart"
+      >
+        <defs>
+          <linearGradient id="collectionFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4B1D6E" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#4B1D6E" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((t) => (
+          <line
+            key={t}
+            x1={padX}
+            x2={width - padX}
+            y1={padY + t * (height - padY * 2)}
+            y2={padY + t * (height - padY * 2)}
+            stroke="#e8dff2"
+            strokeDasharray="4 6"
+          />
+        ))}
+        <path d={area} fill="url(#collectionFill)" />
+        <path
+          d={line}
+          fill="none"
+          stroke="#4B1D6E"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {coords.map((p) => (
+          <circle
+            key={p.key}
+            cx={p.x}
+            cy={p.y}
+            r="3.5"
+            fill="#C9A227"
+            stroke="#fff"
+            strokeWidth="2"
+          />
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between px-1 text-[11px] text-muted-foreground">
+        {data
+          .filter((_, i) => i % 2 === 0 || i === data.length - 1)
+          .map((p) => (
+            <span key={p.key}>{p.label}</span>
+          ))}
+      </div>
+    </div>
+  )
+}
+
+function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
+  const total = slices.reduce((sum, item) => sum + item.count, 0) || 1
+  const radius = 54
+  const stroke = 18
+  const circumference = 2 * Math.PI * radius
+  let offset = 0
+  const hasData = slices.some((s) => s.count > 0)
+
+  return (
+    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
+      <svg width="160" height="160" viewBox="0 0 160 160" className="shrink-0">
+        <circle
+          cx="80"
+          cy="80"
+          r={radius}
+          fill="none"
+          stroke="#f3ebfa"
+          strokeWidth={stroke}
+        />
+        {hasData
+          ? slices.map((slice) => {
+              const length = (slice.count / total) * circumference
+              const dashOffset = -offset
+              offset += length
+              return (
+                <circle
+                  key={slice.key}
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  fill="none"
+                  stroke={slice.color}
+                  strokeWidth={stroke}
+                  strokeDasharray={`${length} ${circumference - length}`}
+                  strokeDashoffset={dashOffset}
+                  strokeLinecap="butt"
+                  transform="rotate(-90 80 80)"
+                />
+              )
+            })
+          : null}
+        <text
+          x="80"
+          y="76"
+          textAnchor="middle"
+          className="fill-foreground text-[11px] font-medium"
+        >
+          Status
+        </text>
+        <text
+          x="80"
+          y="96"
+          textAnchor="middle"
+          className="fill-primary text-lg font-bold"
+        >
+          {hasData ? '100%' : '0%'}
+        </text>
+      </svg>
+
+      <ul className="w-full space-y-3 sm:w-auto">
+        {slices.map((slice) => (
+          <li key={slice.key} className="flex items-center gap-3 text-sm">
+            <span
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: slice.color }}
+            />
+            <span className="min-w-28 text-muted-foreground">{slice.label}</span>
+            <span className="font-semibold text-foreground">{slice.percent}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case 'paid':
+      return 'bg-[#f4efd8] text-[#5c480f]'
+    case 'partial':
+      return 'bg-sky-50 text-sky-800'
+    case 'overdue':
+      return 'bg-rose-50 text-rose-700'
+    default:
+      return 'bg-secondary text-primary'
+  }
+}
+
+export default function SuperAdminDashboardPage() {
+  const dashboardQuery = useQuery({
+    queryKey: ['super-admin-dashboard'],
+    queryFn: () => superAdminDashboardService.get(),
+  })
+
+  const summary = dashboardQuery.data?.summary
+  const collectionVolume = useMemo(
+    () => dashboardQuery.data?.collection_volume ?? [],
+    [dashboardQuery.data],
+  )
+  const billStatus = useMemo(
+    () => dashboardQuery.data?.bill_status ?? [],
+    [dashboardQuery.data],
+  )
+  const recentBills = useMemo(
+    () => dashboardQuery.data?.recent_bills ?? [],
+    [dashboardQuery.data],
+  )
+  const topMerchants = useMemo(
+    () => dashboardQuery.data?.top_merchants ?? [],
+    [dashboardQuery.data],
+  )
+
+  const metrics = [
+    {
+      label: 'Total Merchants',
+      value: String(summary?.merchants ?? 0),
+      icon: Building2,
+      iconClass: 'bg-primary text-primary-foreground',
+    },
+    {
+      label: 'Total Billing',
+      value: summary?.total_billing_label ?? '₱0.00',
+      icon: FileText,
+      iconClass: 'bg-[#efe6f8] text-primary',
+    },
+    {
+      label: 'Total Collections',
+      value: summary?.total_collections_label ?? '₱0.00',
+      icon: CreditCard,
+      iconClass: 'bg-[#f7efd4] text-gold-foreground',
+    },
+    {
+      label: 'Outstanding',
+      value: summary?.outstanding_label ?? '₱0.00',
+      icon: Clock3,
+      iconClass: 'bg-[#f8e9c8] text-[#8a6a12]',
+    },
+  ] as const
+
+  return (
+    <SuperAdminShell>
+      <div className="home-rise space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Admin Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+            Platform-wide overview of merchants, billing and collections.
+          </p>
+        </div>
+
+        {dashboardQuery.isLoading ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-white py-20 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+            Loading dashboard…
+          </div>
+        ) : dashboardQuery.isError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-sm text-rose-700">
+            Unable to load dashboard. Please refresh and try again.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {metrics.map(({ label, value, icon: Icon, iconClass }) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{label}</p>
+                      <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+                        {value}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        'grid size-10 place-items-center rounded-xl',
+                        iconClass,
+                      )}
+                    >
+                      <Icon className="size-5" />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:col-span-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Overdue Bills</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+                      {summary?.overdue_bills ?? 0}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summary?.active_merchants ?? 0} active merchants
+                    </p>
+                  </div>
+                  <span className="grid size-10 place-items-center rounded-xl bg-[#fce8ef] text-[#b4234a]">
+                    <AlertTriangle className="size-5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+              <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold text-foreground">
+                    Collection Volume
+                  </h2>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-primary">
+                    Last 30 days
+                  </span>
+                </div>
+                <CollectionVolumeChart points={collectionVolume} />
+              </section>
+
+              <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+                <h2 className="mb-4 text-base font-semibold text-foreground">
+                  Bill Status
+                </h2>
+                <BillStatusDonut slices={billStatus} />
+              </section>
+            </div>
+
+            <TopMerchantsCard merchants={topMerchants} />
+
+            <RecentBillsTable bills={recentBills} />
+          </>
+        )}
+      </div>
+    </SuperAdminShell>
+  )
+}
+
+function TopMerchantsCard({
+  merchants,
+}: {
+  merchants: DashboardTopMerchant[]
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">
+            Top Merchant Performers
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ranked by completed transaction collections
+          </p>
+        </div>
+        <Link
+          to="/admin/super/merchants"
+          className="inline-flex items-center gap-1 text-sm font-medium text-gold transition hover:text-primary"
+        >
+          View merchants
+          <ArrowRight className="size-4" />
+        </Link>
+      </div>
+
+      {merchants.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-[#fcfaff] px-4 py-10 text-center text-sm text-muted-foreground">
+          No merchant transactions yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {merchants.map((merchant) => (
+            <div
+              key={merchant.uuid}
+              className="rounded-2xl border border-border/80 bg-[#fcfaff] px-4 py-3.5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {merchant.rank}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">
+                      {merchant.name}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                      {merchant.code} · {merchant.transaction_count}{' '}
+                      transaction
+                      {merchant.transaction_count === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-base font-bold text-foreground">
+                    {merchant.collected_label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {merchant.share_percent}% of platform · billed{' '}
+                    {merchant.billed_label}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${Math.max(merchant.bar_percent, 4)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function RecentBillsTable({ bills }: { bills: DashboardRecentBill[] }) {
+  return (
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-foreground">Recent Bills</h2>
+        <Link
+          to="/admin/super/bills"
+          className="inline-flex items-center gap-1 text-sm font-medium text-gold transition hover:text-primary"
+        >
+          View all
+          <ArrowRight className="size-4" />
+        </Link>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <th className="pb-3 pr-4 font-semibold">Bill #</th>
+              <th className="pb-3 pr-4 font-semibold">Merchant</th>
+              <th className="pb-3 pr-4 font-semibold">Customer</th>
+              <th className="pb-3 pr-4 font-semibold">Amount</th>
+              <th className="pb-3 pr-4 font-semibold">Due Date</th>
+              <th className="pb-3 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bills.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="py-8 text-center text-sm text-muted-foreground"
+                >
+                  No bills yet.
+                </td>
+              </tr>
+            ) : (
+              bills.map((bill) => (
+                <tr
+                  key={bill.uuid}
+                  className="border-b border-border/70 last:border-0"
+                >
+                  <td className="py-3.5 pr-4">
+                    <Link
+                      to="/admin/super/bills"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {bill.bill_number}
+                    </Link>
+                  </td>
+                  <td className="py-3.5 pr-4 text-foreground">
+                    {bill.merchant_name || '—'}
+                  </td>
+                  <td className="py-3.5 pr-4 text-foreground">
+                    {bill.customer_name || '—'}
+                  </td>
+                  <td className="py-3.5 pr-4 font-medium text-foreground">
+                    {bill.amount_label}
+                  </td>
+                  <td className="py-3.5 pr-4 text-muted-foreground">
+                    {bill.due_label}
+                  </td>
+                  <td className="py-3.5">
+                    <span
+                      className={cn(
+                        'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                        statusBadgeClass(bill.status),
+                      )}
+                    >
+                      {bill.status_label}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
