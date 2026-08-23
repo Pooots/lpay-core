@@ -19,6 +19,10 @@ import type {
   BillCoverageMode,
   BillDueMode,
   BillsSetItem,
+  MerchantPenaltySettings,
+  PenaltyAmountType,
+  PenaltyApplyBase,
+  PenaltyApplyMode,
 } from '@/types/settings'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +31,7 @@ type SettingsTab =
   | 'accounting'
   | 'banks'
   | 'bills_set'
+  | 'penalty'
   | 'commissions'
   | 'payment_gateway'
   | 'payment_methods'
@@ -37,6 +42,7 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: 'accounting', label: 'Accounting Settings' },
   { id: 'banks', label: 'Bank Details' },
   { id: 'bills_set', label: 'Bills Set' },
+  { id: 'penalty', label: 'Penalty' },
   { id: 'commissions', label: 'Commissions' },
   { id: 'payment_methods', label: 'Payment Method' },
   { id: 'rates', label: 'Rates' },
@@ -61,6 +67,7 @@ export default function SettingsPage() {
   const accounting = settingsQuery.data?.accounting
   const banks = settingsQuery.data?.banks ?? []
   const billsSets = settingsQuery.data?.bills_sets ?? []
+  const penalty = settingsQuery.data?.penalty
   const commissions = settingsQuery.data?.commissions
   const paymentGateway = settingsQuery.data?.payment_gateway
   const paymentMethods = settingsQuery.data?.payment_methods ?? []
@@ -332,6 +339,25 @@ export default function SettingsPage() {
                 </div>
               ) : null}
 
+              {tab === 'penalty' && penalty ? (
+                <div className="mt-6">
+                  <PenaltySettingsForm
+                    penalty={penalty}
+                    onError={(message) => {
+                      setSuccess('')
+                      setError(message)
+                    }}
+                    onSuccess={async (message) => {
+                      setError('')
+                      setSuccess(message)
+                      await queryClient.invalidateQueries({
+                        queryKey: ['merchant-settings'],
+                      })
+                    }}
+                  />
+                </div>
+              ) : null}
+
               {tab === 'commissions' && commissions ? (
                 <MerchantCommissionsPanel commissions={commissions} />
               ) : null}
@@ -361,6 +387,288 @@ export default function SettingsPage() {
         </section>
       </div>
     </MerchantShell>
+  )
+}
+
+function PenaltySettingsForm({
+  penalty,
+  onError,
+  onSuccess,
+}: {
+  penalty: MerchantPenaltySettings
+  onError: (message: string) => void
+  onSuccess: (message: string) => void | Promise<void>
+}) {
+  const [enabled, setEnabled] = useState(penalty.enabled)
+  const [amountType, setAmountType] = useState<PenaltyAmountType>(
+    penalty.amount_type,
+  )
+  const [amount, setAmount] = useState(String(penalty.amount ?? 0))
+  const [graceDays, setGraceDays] = useState(String(penalty.grace_days ?? 0))
+  const [applyMode, setApplyMode] = useState<PenaltyApplyMode>(
+    penalty.apply_mode,
+  )
+  const [applyBase, setApplyBase] = useState<PenaltyApplyBase>(
+    penalty.apply_base,
+  )
+  const [maxPenalty, setMaxPenalty] = useState(
+    penalty.max_penalty === null || penalty.max_penalty === undefined
+      ? ''
+      : String(penalty.max_penalty),
+  )
+  const [notes, setNotes] = useState(penalty.notes ?? '')
+
+  useEffect(() => {
+    setEnabled(penalty.enabled)
+    setAmountType(penalty.amount_type)
+    setAmount(String(penalty.amount ?? 0))
+    setGraceDays(String(penalty.grace_days ?? 0))
+    setApplyMode(penalty.apply_mode)
+    setApplyBase(penalty.apply_base)
+    setMaxPenalty(
+      penalty.max_penalty === null || penalty.max_penalty === undefined
+        ? ''
+        : String(penalty.max_penalty),
+    )
+    setNotes(penalty.notes ?? '')
+  }, [penalty])
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      settingsService.updatePenalty({
+        enabled,
+        amount_type: amountType,
+        amount: Number(amount) || 0,
+        grace_days: Number(graceDays) || 0,
+        apply_mode: applyMode,
+        apply_base: applyBase,
+        max_penalty: maxPenalty.trim() === '' ? null : Number(maxPenalty),
+        notes: notes.trim() || null,
+      }),
+    onSuccess: async () => {
+      await onSuccess('Penalty settings saved.')
+    },
+    onError: (err) => {
+      onError(axiosMessage(err, 'Unable to save penalty settings.'))
+    },
+  })
+
+  const previewAmount =
+    amountType === 'percentage'
+      ? `${Number(amount) || 0}%`
+      : `₱${(Number(amount) || 0).toLocaleString('en-PH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Overdue penalty</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Set how much extra to charge when a bill passes its due date, and how
+          that fee is applied over time.
+        </p>
+      </div>
+
+      <label className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            Enable overdue penalty
+          </p>
+          <p className="text-xs text-muted-foreground">
+            When off, overdue bills keep their original balance only.
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="size-4 accent-[#4B1D6E]"
+        />
+      </label>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            Penalty type
+          </span>
+          <select
+            value={amountType}
+            disabled={!enabled}
+            onChange={(e) =>
+              setAmountType(e.target.value as PenaltyAmountType)
+            }
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          >
+            <option value="fixed">Fixed amount (₱)</option>
+            <option value="percentage">Percentage (%)</option>
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            {amountType === 'percentage' ? 'Penalty rate (%)' : 'Penalty amount (₱)'}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={amountType === 'percentage' ? 100 : undefined}
+            step="0.01"
+            disabled={!enabled}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          />
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            Grace days after due date
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={365}
+            disabled={!enabled}
+            value={graceDays}
+            onChange={(e) => setGraceDays(e.target.value)}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          />
+          <span className="mt-1 block text-xs text-muted-foreground">
+            0 = penalty can start the day after due date.
+          </span>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            How penalty applies
+          </span>
+          <select
+            value={applyMode}
+            disabled={!enabled}
+            onChange={(e) =>
+              setApplyMode(e.target.value as PenaltyApplyMode)
+            }
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          >
+            <option value="one_time">One-time fee</option>
+            <option value="daily">Daily (repeats each day)</option>
+            <option value="weekly">Weekly (every 7 days)</option>
+            <option value="monthly">Monthly (every 30 days)</option>
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            Calculate percentage from
+          </span>
+          <select
+            value={applyBase}
+            disabled={!enabled || amountType !== 'percentage'}
+            onChange={(e) =>
+              setApplyBase(e.target.value as PenaltyApplyBase)
+            }
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          >
+            <option value="balance">Outstanding balance</option>
+            <option value="original_amount">Original bill amount</option>
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-foreground">
+            Maximum penalty cap (₱)
+          </span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            disabled={!enabled}
+            value={maxPenalty}
+            onChange={(e) => setMaxPenalty(e.target.value)}
+            placeholder="No cap"
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+          />
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Optional. Useful for daily/weekly/monthly penalties.
+          </span>
+        </label>
+      </div>
+
+      <label className="block text-sm">
+        <span className="mb-1.5 block font-medium text-foreground">
+          Notes for your team (optional)
+        </span>
+        <textarea
+          rows={3}
+          disabled={!enabled}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g. Apply only to monthly dues, not special assessments."
+          className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+        />
+      </label>
+
+      <div className="rounded-2xl border border-primary/15 bg-secondary/50 p-4">
+        <p className="text-sm font-semibold text-foreground">How it works</p>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>Member bill reaches its due date unpaid.</li>
+          <li>
+            After the grace period ({Number(graceDays) || 0} day
+            {(Number(graceDays) || 0) === 1 ? '' : 's'}), penalty becomes active.
+          </li>
+          <li>
+            Charge {previewAmount}{' '}
+            {amountType === 'percentage'
+              ? applyBase === 'original_amount'
+                ? 'of the original bill amount'
+                : 'of the outstanding balance'
+              : 'as a fixed fee'}
+            .
+          </li>
+          <li>
+            {applyMode === 'one_time'
+              ? 'Fee is added once.'
+              : applyMode === 'daily'
+                ? 'Fee repeats every day the bill stays unpaid.'
+                : applyMode === 'weekly'
+                  ? 'Fee repeats every 7 days the bill stays unpaid.'
+                  : 'Fee repeats every 30 days the bill stays unpaid.'}
+            {maxPenalty.trim()
+              ? ` Total penalty will not exceed ₱${Number(maxPenalty).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+              : ''}
+          </li>
+        </ol>
+        <p className="mt-3 rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground">
+          {enabled
+            ? `Summary: When overdue, charge ${previewAmount} after ${Number(graceDays) || 0} grace day(s), ${
+                applyMode === 'one_time'
+                  ? 'one time'
+                  : applyMode === 'daily'
+                    ? 'daily'
+                    : applyMode === 'weekly'
+                      ? 'weekly'
+                      : 'monthly'
+              }.`
+            : 'Penalty is currently turned off.'}
+        </p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-60"
+        >
+          {saveMutation.isPending ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : null}
+          Save penalty settings
+        </button>
+      </div>
+    </div>
   )
 }
 

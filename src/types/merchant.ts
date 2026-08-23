@@ -18,6 +18,12 @@ export type Merchant = {
   logo_path?: string | null
   logo_url?: string | null
   role: string
+  plan?: string | null
+  plan_uuid?: string | null
+  plan_name?: string | null
+  plan_member_range_label?: string | null
+  plan_member_min?: number | null
+  plan_member_max?: number | null
   settlement_frequency: SettlementFrequency
   settlement_frequency_label: string
   settlement_frequency_description: string
@@ -48,6 +54,7 @@ export type UpdateMerchantPayload = {
   address?: string | null
   status?: MerchantStatus
   settlement_frequency?: SettlementFrequency
+  plan_uuid?: string | null
   commission_tax?: number
   commission_tax_type?: CommissionType
   commission_system_fee?: number

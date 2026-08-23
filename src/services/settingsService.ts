@@ -12,7 +12,9 @@ import type {
   RunBillSetResult,
   StoreBillsSetPayload,
   UpdateMerchantPaymentGatewayPayload,
+  UpdateMerchantPenaltyPayload,
   UpdateMerchantProfilePayload,
+  MerchantPenaltySettings,
 } from '@/types/settings'
 
 type SettingsResponse = { data: MerchantSettingsData }
@@ -148,6 +150,16 @@ export const settingsService = {
       '/admin/settings/merchant-rates',
       payload,
     )
+    return data.data
+  },
+
+  async updatePenalty(
+    payload: UpdateMerchantPenaltyPayload,
+  ): Promise<MerchantPenaltySettings> {
+    const { data } = await merchantApi.put<{
+      data: MerchantPenaltySettings
+      message?: string
+    }>('/admin/settings/penalty', payload)
     return data.data
   },
 }

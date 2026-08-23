@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Clock3,
   CreditCard,
+  Download,
   FileText,
   Hash,
   LoaderCircle,
@@ -15,13 +16,20 @@ import {
   MapPin,
   Phone,
   Receipt,
+  ScrollText,
   UserRound,
 } from 'lucide-react'
 import { portalService } from '@/services/portalService'
-import type { PortalBill, PortalPayment } from '@/types/portal'
+import type {
+  CustomerPortalProfile,
+  PortalBill,
+  PortalPayment,
+} from '@/types/portal'
 import { cn } from '@/lib/utils'
+import { downloadSoaFile, openSoaDocument } from '@/lib/soaDocument'
+import { downloadEReceiptPdf } from '@/lib/eReceiptDocument'
 
-type Tab = 'pending' | 'history'
+type Tab = 'pending' | 'history' | 'soa'
 
 function billStatusClass(status: string, isOverdue?: boolean) {
   if (isOverdue || status === 'overdue') {
@@ -106,6 +114,16 @@ function BillCard({
         </div>
       </dl>
 
+      {bill.has_penalty && (bill.penalty_amount ?? 0) > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950">
+          <p className="font-semibold">Overdue penalty included</p>
+          <p className="mt-1 text-xs text-amber-900/90">
+            Bill {bill.principal_amount_label ?? bill.amount_label} + penalty{' '}
+            {bill.penalty_amount_label}. Total due: {bill.balance_label}.
+          </p>
+        </div>
+      ) : null}
+
       {showPay && bill.is_payable ? (
         <div className="mt-4 flex justify-end border-t border-border pt-4">
           <button
@@ -122,11 +140,20 @@ function BillCard({
   )
 }
 
-function PaymentHistoryCard({ payment }: { payment: PortalPayment }) {
+function PaymentHistoryCard({
+  payment,
+  merchant,
+  customer,
+}: {
+  payment: PortalPayment
+  merchant: CustomerPortalProfile['merchant']
+  customer: CustomerPortalProfile['customer']
+}) {
   const methodLabel =
     payment.payment_method === 'account_credit'
       ? 'Account credit'
       : payment.payment_method.replace(/_/g, ' ')
+  const [downloading, setDownloading] = useState(false)
 
   return (
     <article className="rounded-2xl border border-border bg-white p-4 shadow-[0_8px_24px_-20px_rgb(75_29_110_/_0.35)] sm:p-5">
@@ -206,6 +233,31 @@ function PaymentHistoryCard({ payment }: { payment: PortalPayment }) {
           Applied from account credit to this bill.
         </p>
       ) : null}
+
+      <div className="mt-4 flex justify-end border-t border-border pt-4">
+        <button
+          type="button"
+          disabled={downloading}
+          onClick={() => {
+            void (async () => {
+              setDownloading(true)
+              try {
+                await downloadEReceiptPdf(payment, { merchant, customer })
+              } finally {
+                setDownloading(false)
+              }
+            })()
+          }}
+          className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60"
+        >
+          {downloading ? (
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+          ) : (
+            <Download className="size-4 text-primary" />
+          )}
+          {downloading ? 'Preparing…' : 'Download E-Receipt'}
+        </button>
+      </div>
     </article>
   )
 }
@@ -413,10 +465,11 @@ export default function CustomerProfilePage() {
                     Bills & transactions
                   </h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Review pending dues and your payment history
+                    Review pending dues, payment history, and statement of
+                    account
                   </p>
                 </div>
-                <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+                <div className="inline-flex flex-wrap rounded-xl border border-border bg-muted/40 p-1">
                   <button
                     type="button"
                     onClick={() => setTab('pending')}
@@ -443,6 +496,19 @@ export default function CustomerProfilePage() {
                     <Receipt className="size-3.5" />
                     History ({profile.summary.paid_count})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTab('soa')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition',
+                      tab === 'soa'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <ScrollText className="size-3.5" />
+                    SOA
+                  </button>
                 </div>
               </div>
 
@@ -452,44 +518,104 @@ export default function CustomerProfilePage() {
                 </div>
               ) : null}
 
-              <div className="mt-5 space-y-3">
-                {tab === 'pending' ? (
-                  profile.pending_bills.length === 0 ? (
+              {tab === 'soa' ? (
+                <div className="mt-5 space-y-4">
+                  <div className="flex flex-col gap-3 rounded-2xl border border-primary/15 bg-secondary/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        Statement of Account — {profile.merchant.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Download as PDF anytime. Includes payment listing and
+                        outstanding balances for this account.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openSoaDocument(profile)
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860]"
+                      >
+                        <ScrollText className="size-4 text-gold" />
+                        View & print SOA
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void downloadSoaFile(profile)
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+                      >
+                        <Download className="size-4 text-primary" />
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
+
+                  {profile.history.length === 0 ? (
                     <EmptyState
-                      icon={FileText}
-                      title="No pending bills"
-                      description="You’re all caught up. New bills will appear here when issued."
+                      icon={ScrollText}
+                      title="No payments for SOA yet"
+                      description="Completed payments will appear here and on your downloadable statement."
                     />
                   ) : (
-                    profile.pending_bills.map((bill) => (
-                      <BillCard
-                        key={bill.uuid}
-                        bill={bill}
-                        showPay
-                        onPay={(selected) => {
-                          void navigate({
-                            to: '/checkout',
-                            search: {
-                              account: accountNumber,
-                              bill: selected.uuid,
-                            },
-                          })
-                        }}
+                    profile.history.map((payment) => (
+                      <PaymentHistoryCard
+                        key={payment.uuid}
+                        payment={payment}
+                        merchant={profile.merchant}
+                        customer={profile.customer}
                       />
                     ))
-                  )
-                ) : profile.history.length === 0 ? (
-                  <EmptyState
-                    icon={Receipt}
-                    title="No payment history yet"
-                    description="Each payment will appear here with its own reference number."
-                  />
-                ) : (
-                  profile.history.map((payment) => (
-                    <PaymentHistoryCard key={payment.uuid} payment={payment} />
-                  ))
-                )}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  {tab === 'pending' ? (
+                    profile.pending_bills.length === 0 ? (
+                      <EmptyState
+                        icon={FileText}
+                        title="No pending bills"
+                        description="You’re all caught up. New bills will appear here when issued."
+                      />
+                    ) : (
+                      profile.pending_bills.map((bill) => (
+                        <BillCard
+                          key={bill.uuid}
+                          bill={bill}
+                          showPay
+                          onPay={(selected) => {
+                            void navigate({
+                              to: '/checkout',
+                              search: {
+                                account: accountNumber,
+                                bill: selected.uuid,
+                              },
+                            })
+                          }}
+                        />
+                      ))
+                    )
+                  ) : profile.history.length === 0 ? (
+                    <EmptyState
+                      icon={Receipt}
+                      title="No payment history yet"
+                      description="Each payment will appear here with its own reference number."
+                    />
+                  ) : (
+                    profile.history.map((payment) => (
+                      <PaymentHistoryCard
+                        key={payment.uuid}
+                        payment={payment}
+                        merchant={profile.merchant}
+                        customer={profile.customer}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
             </section>
 
             <section className="rounded-2xl border border-border bg-white/90 px-5 py-4 text-sm text-muted-foreground sm:px-6">

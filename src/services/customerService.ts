@@ -1,4 +1,4 @@
-import { merchantApi } from '@/lib/api'
+import { api, merchantApi } from '@/lib/api'
 import type {
   Customer,
   CustomerDetail,
@@ -6,6 +6,10 @@ import type {
   CustomerImportResult,
   CustomerImportRow,
   CustomerPayload,
+  MemberRegistrationSettings,
+  PublicMemberRegistrationForm,
+  PublicMemberRegistrationPayload,
+  PublicMemberRegistrationResult,
 } from '@/types/customer'
 import type { PaginatedResult, PaginationMeta } from '@/types/pagination'
 import { DEFAULT_PAGE_SIZE, emptyPaginationMeta } from '@/types/pagination'
@@ -18,6 +22,15 @@ type CustomerResponse = { data: Customer; message?: string }
 type CustomerDetailResponse = { data: CustomerDetail }
 type ImportResponse = { data: CustomerImportResult; message?: string }
 type ImportPreviewResponse = { data: CustomerImportPreview }
+type RegistrationSettingsResponse = {
+  data: MemberRegistrationSettings
+  message?: string
+}
+type PublicRegistrationFormResponse = { data: PublicMemberRegistrationForm }
+type PublicRegistrationResultResponse = {
+  data: PublicMemberRegistrationResult
+  message?: string
+}
 
 export type CustomerListParams = {
   q?: string
@@ -116,5 +129,62 @@ export const customerService = {
       responseType: 'blob',
     })
     return data as Blob
+  },
+
+  async getRegistrationSettings(): Promise<MemberRegistrationSettings> {
+    const { data } = await merchantApi.get<RegistrationSettingsResponse>(
+      '/admin/customers/registration',
+    )
+    return data.data
+  },
+
+  async updateRegistrationSettings(payload: {
+    enabled: boolean
+    fields: Array<{
+      key: string
+      label?: string
+      type?: string
+      enabled: boolean
+      required: boolean
+      is_custom?: boolean
+    }>
+  }): Promise<MemberRegistrationSettings> {
+    const { data } = await merchantApi.put<RegistrationSettingsResponse>(
+      '/admin/customers/registration',
+      payload,
+    )
+    return data.data
+  },
+
+  async getPublicRegistrationForm(
+    merchantCode: string,
+  ): Promise<PublicMemberRegistrationForm> {
+    const encoded = encodeURIComponent(merchantCode.trim())
+    const { data } = await api.get<PublicRegistrationFormResponse>(
+      `/portal/merchants/${encoded}/registration`,
+    )
+    return data.data
+  },
+
+  async submitPublicRegistration(
+    merchantCode: string,
+    payload: PublicMemberRegistrationPayload,
+    files: Record<string, File> = {},
+  ): Promise<PublicMemberRegistrationResult> {
+    const encoded = encodeURIComponent(merchantCode.trim())
+    const form = new FormData()
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null) return
+      form.append(key, String(value))
+    })
+    Object.entries(files).forEach(([key, file]) => {
+      form.append(key, file)
+    })
+    const { data } = await api.post<PublicRegistrationResultResponse>(
+      `/portal/merchants/${encoded}/register`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    return data.data
   },
 }

@@ -32,6 +32,11 @@ export type PortalBill = {
   description: string | null
   amount: number
   amount_label: string
+  principal_amount?: number
+  principal_amount_label?: string
+  penalty_amount?: number
+  penalty_amount_label?: string
+  has_penalty?: boolean
   amount_paid: number
   amount_paid_label: string
   balance: number

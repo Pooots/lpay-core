@@ -14,6 +14,7 @@ import { MerchantCodeQr } from '@/components/admin/MerchantCodeQr'
 import { BankDetailsPanel } from '@/components/admin/BankDetailsPanel'
 import { MerchantLogoUploader } from '@/components/admin/MerchantLogoUploader'
 import { merchantService } from '@/services/merchantService'
+import { platformSettingsService } from '@/services/platformSettingsService'
 import type { MerchantBank } from '@/types/settings'
 import type {
   CommissionType,
@@ -25,13 +26,14 @@ import type {
 } from '@/types/merchant'
 import { cn } from '@/lib/utils'
 
-type Tab = 'profile' | 'transaction' | 'accounting' | 'settings'
+type Tab = 'profile' | 'transaction' | 'accounting' | 'settings' | 'plan'
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'profile', label: 'Profile' },
   { id: 'transaction', label: 'Transaction' },
   { id: 'accounting', label: 'Accounting' },
   { id: 'settings', label: 'Settings' },
+  { id: 'plan', label: 'Plan' },
 ]
 
 function statusBadge(status: Merchant['status']) {
@@ -185,6 +187,18 @@ export default function MerchantDetailPage() {
             onRelease={(payoutUuid) =>
               payoutActionMutation.mutate({ payoutUuid, action: 'release' })
             }
+          />
+        ) : tab === 'plan' ? (
+          <MerchantPlanTab
+            merchant={merchant}
+            onSaved={async () => {
+              await queryClient.invalidateQueries({
+                queryKey: ['admin-merchant', uuid],
+              })
+              await queryClient.invalidateQueries({
+                queryKey: ['admin-merchants'],
+              })
+            }}
           />
         ) : (
           <SettingsTab
@@ -1060,6 +1074,153 @@ function SettingsTab({
           </button>
         </form>
       ) : null}
+    </section>
+  )
+}
+
+function MerchantPlanTab({
+  merchant,
+  onSaved,
+}: {
+  merchant: Merchant
+  onSaved: () => Promise<void>
+}) {
+  const [planUuid, setPlanUuid] = useState(merchant.plan_uuid ?? '')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    setPlanUuid(merchant.plan_uuid ?? '')
+  }, [merchant.plan_uuid])
+
+  const plansQuery = useQuery({
+    queryKey: ['platform-merchant-plans'],
+    queryFn: () => platformSettingsService.listPlans(),
+  })
+
+  const planMutation = useMutation({
+    mutationFn: () =>
+      merchantService.update(merchant.uuid, {
+        plan_uuid: planUuid || null,
+      }),
+    onSuccess: async () => {
+      setError('')
+      setSuccess('Merchant plan assigned successfully.')
+      await onSaved()
+    },
+    onError: (err) => {
+      setSuccess('')
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data?.message as string | undefined) ||
+          (err.response?.data?.errors
+            ? Object.values(err.response.data.errors as Record<string, string[]>)
+                .flat()
+                .join(' ')
+            : undefined)
+        : null
+      setError(message ?? 'Unable to assign merchant plan.')
+    },
+  })
+
+  const selectedPlan = (plansQuery.data ?? []).find((p) => p.uuid === planUuid)
+
+  return (
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+      <div className="max-w-xl">
+        <h2 className="text-lg font-bold text-foreground">Merchant plan</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Assign a plan from Settings → Plan settings. Member capacity is
+          enforced when this merchant adds members.
+        </p>
+
+        {error ? (
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </div>
+        ) : null}
+
+        <div className="mt-5 rounded-xl border border-primary/15 bg-secondary/50 px-4 py-3 text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Current assignment
+          </p>
+          <p className="mt-1 font-semibold text-foreground">
+            {merchant.plan_name || 'No plan assigned'}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {merchant.plan_member_range_label ||
+              'Create plans in Super Admin Settings first.'}
+          </p>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            setSuccess('')
+            planMutation.mutate()
+          }}
+          className="mt-5 space-y-5"
+        >
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Select plan
+            </span>
+            {plansQuery.isLoading ? (
+              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin text-primary" />
+                Loading plans…
+              </div>
+            ) : (
+              <select
+                value={planUuid}
+                onChange={(e) => setPlanUuid(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="">No plan</option>
+                {(plansQuery.data ?? [])
+                  .filter((plan) => plan.is_active || plan.uuid === planUuid)
+                  .map((plan) => (
+                    <option key={plan.uuid} value={plan.uuid}>
+                      {plan.name} · {plan.member_range_label}
+                      {plan.is_default ? ' (default)' : ''}
+                    </option>
+                  ))}
+              </select>
+            )}
+          </label>
+
+          {selectedPlan ? (
+            <div className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
+              <p>
+                <span className="font-semibold text-foreground">Range:</span>{' '}
+                {selectedPlan.member_range_label}
+              </p>
+              {selectedPlan.description ? (
+                <p className="mt-1">{selectedPlan.description}</p>
+              ) : null}
+              <p className="mt-1">
+                <span className="font-semibold text-foreground">Fee:</span>{' '}
+                {selectedPlan.monthly_fee_label}
+              </p>
+            </div>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={planMutation.isPending || plansQuery.isLoading}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-[#3f1860] disabled:opacity-60"
+          >
+            {planMutation.isPending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : null}
+            Assign plan
+          </button>
+        </form>
+      </div>
     </section>
   )
 }

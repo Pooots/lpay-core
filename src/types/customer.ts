@@ -18,6 +18,10 @@ export type Customer = {
   address_label: string | null
   date_of_birth: string | null
   date_of_birth_label: string | null
+  custom_fields?: Record<
+    string,
+    { label: string; value: string | null; type?: string; url?: string | null }
+  >
   status: CustomerStatus
   registered_at: string | null
   registered_label: string | null
@@ -73,6 +77,11 @@ export type CustomerBillRow = {
   description: string | null
   amount: number
   amount_label: string
+  principal_amount?: number
+  principal_amount_label?: string
+  penalty_amount?: number
+  penalty_amount_label?: string
+  has_penalty?: boolean
   amount_paid: number
   amount_paid_label: string
   balance: number
@@ -127,4 +136,63 @@ export type CustomerDetail = Customer & {
   missed_bills: CustomerBillRow[]
   bills: CustomerBillRow[]
   transactions: CustomerTransactionRow[]
+}
+
+export type MemberRegistrationFieldKey =
+  | 'first_name'
+  | 'last_name'
+  | 'email'
+  | 'phone'
+  | 'phase'
+  | 'block'
+  | 'lot'
+  | 'street'
+  | 'date_of_birth'
+  | (string & {})
+
+export type MemberRegistrationField = {
+  key: MemberRegistrationFieldKey
+  label: string
+  enabled: boolean
+  required: boolean
+  type: 'text' | 'email' | 'date' | 'number' | 'textarea' | 'image'
+  is_custom?: boolean
+}
+
+export type MemberRegistrationSettings = {
+  enabled: boolean
+  fields: MemberRegistrationField[]
+  registration_url: string
+  merchant: {
+    uuid: string
+    code: string
+    name: string
+  }
+}
+
+export type PublicMemberRegistrationForm = {
+  merchant: {
+    uuid: string
+    code: string
+    name: string
+    email: string | null
+    phone: string | null
+    logo_url?: string | null
+  }
+  enabled: boolean
+  fields: MemberRegistrationField[]
+}
+
+export type PublicMemberRegistrationPayload = Partial<
+  Record<MemberRegistrationFieldKey, string>
+>
+
+export type PublicMemberRegistrationResult = {
+  uuid: string
+  account_number: string
+  full_name: string
+  merchant: {
+    code: string
+    name: string
+  }
 }

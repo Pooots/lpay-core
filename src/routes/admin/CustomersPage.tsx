@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import {
+  Check,
+  Copy,
   Download,
   Eye,
+  Link2,
   LoaderCircle,
   Pencil,
   Plus,
@@ -23,11 +26,487 @@ import type {
   CustomerPayload,
   CustomerStatus,
   CustomerTransactionRow,
+  MemberRegistrationField,
+  MemberRegistrationSettings,
 } from '@/types/customer'
 import { emptyPaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
 
 type ModalMode = 'create' | 'edit' | 'view' | null
+
+function buildLocalRegistrationUrl(code: string): string {
+  return `${window.location.origin}/register/${encodeURIComponent(code)}`
+}
+
+function RegistrationModal({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [enabled, setEnabled] = useState(true)
+  const [fields, setFields] = useState<MemberRegistrationField[]>([])
+  const [newCustomLabel, setNewCustomLabel] = useState('')
+  const [newCustomType, setNewCustomType] = useState<
+    MemberRegistrationField['type']
+  >('text')
+  const [sendEmail, setSendEmail] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const settingsQuery = useQuery({
+    queryKey: ['member-registration-settings'],
+    queryFn: () => customerService.getRegistrationSettings(),
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (!settingsQuery.data) return
+    setEnabled(settingsQuery.data.enabled)
+    setFields(settingsQuery.data.fields)
+    setError('')
+    setSuccess('')
+    setCopied(false)
+    setNewCustomLabel('')
+    setNewCustomType('text')
+  }, [settingsQuery.data])
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      customerService.updateRegistrationSettings({
+        enabled,
+        fields: fields.map((field) => ({
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          enabled: field.enabled,
+          required: field.required,
+          is_custom: Boolean(field.is_custom),
+        })),
+      }),
+    onSuccess: async (data) => {
+      setFields(data.fields)
+      setEnabled(data.enabled)
+      setSuccess('Registration settings saved.')
+      setError('')
+      await queryClient.invalidateQueries({
+        queryKey: ['member-registration-settings'],
+      })
+    },
+    onError: (err) => {
+      setSuccess('')
+      setError(axiosMessage(err, 'Unable to save registration settings.'))
+    },
+  })
+
+  if (!open) return null
+
+  const settings = settingsQuery.data as MemberRegistrationSettings | undefined
+  const registrationUrl = settings?.merchant.code
+    ? buildLocalRegistrationUrl(settings.merchant.code)
+    : settings?.registration_url || ''
+
+  const standardFields = fields.filter((field) => !field.is_custom)
+  const customFields = fields.filter((field) => field.is_custom)
+
+  const toggleField = (
+    key: string,
+    patch: Partial<Pick<MemberRegistrationField, 'enabled' | 'required' | 'label'>>,
+  ) => {
+    setFields((current) =>
+      current.map((field) => {
+        if (field.key !== key) return field
+        if (field.key === 'first_name') {
+          return { ...field, enabled: true, required: true }
+        }
+        const next = { ...field, ...patch }
+        if (!next.enabled) next.required = false
+        return next
+      }),
+    )
+  }
+
+  const addCustomField = () => {
+    const label = newCustomLabel.trim()
+    if (!label) {
+      setError('Enter a label for the custom field.')
+      return
+    }
+    if (customFields.length >= 20) {
+      setError('You can add up to 20 custom fields.')
+      return
+    }
+    const key = `custom_${label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 24) || 'field'}_${Math.random().toString(36).slice(2, 6)}`
+    setFields((current) => [
+      ...current,
+      {
+        key,
+        label,
+        type: newCustomType,
+        enabled: true,
+        required: false,
+        is_custom: true,
+      },
+    ])
+    setNewCustomLabel('')
+    setNewCustomType('text')
+    setError('')
+  }
+
+  const removeCustomField = (key: string) => {
+    setFields((current) =>
+      current.filter((field) => !(field.is_custom && field.key === key)),
+    )
+  }
+
+  const copyLink = async () => {
+    if (!registrationUrl) return
+    try {
+      await navigator.clipboard.writeText(registrationUrl)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Unable to copy link. Please copy it manually.')
+    }
+  }
+
+  const openMail = () => {
+    const email = sendEmail.trim()
+    if (!email || !registrationUrl || !settings) return
+    const subject = encodeURIComponent(
+      `Register as a member of ${settings.merchant.name}`,
+    )
+    const body = encodeURIComponent(
+      `Hello,\n\nPlease use this link to register as a member of ${settings.merchant.name}:\n\n${registrationUrl}\n\nThank you.`,
+    )
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-[#2a1a3d]/35 backdrop-blur-sm"
+        aria-label="Close dialog"
+        onClick={onClose}
+      />
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-white p-6 shadow-[0_24px_60px_-28px_rgb(75_29_110_/_0.45)] sm:p-7">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-foreground">
+              Member registration
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose standard and custom fields, then share the registration
+              link.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        {settingsQuery.isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+            Loading registration settings…
+          </div>
+        ) : settingsQuery.isError ? (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            Unable to load registration settings.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <label className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Allow online registration
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  When off, the public registration link cannot be used.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                className="size-4 accent-[#4B1D6E]"
+              />
+            </label>
+
+            <div>
+              <p className="mb-2 text-sm font-semibold text-foreground">
+                Standard fields
+              </p>
+              <div className="space-y-2">
+                {standardFields.map((field) => (
+                  <div
+                    key={field.key}
+                    className="grid gap-2 rounded-xl border border-border px-3 py-2.5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                  >
+                    <p className="text-sm font-medium text-foreground">
+                      {field.label}
+                      {field.key === 'first_name' ? (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          (always required)
+                        </span>
+                      ) : null}
+                    </p>
+                    <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={field.enabled}
+                        disabled={field.key === 'first_name'}
+                        onChange={(e) =>
+                          toggleField(field.key, {
+                            enabled: e.target.checked,
+                          })
+                        }
+                        className="size-3.5 accent-[#4B1D6E]"
+                      />
+                      Show
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={field.required}
+                        disabled={field.key === 'first_name' || !field.enabled}
+                        onChange={(e) =>
+                          toggleField(field.key, {
+                            required: e.target.checked,
+                          })
+                        }
+                        className="size-3.5 accent-[#4B1D6E]"
+                      />
+                      Required
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-semibold text-foreground">
+                Custom fields
+              </p>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Add merchant-specific questions (e.g. Unit number, Company,
+                Membership ID).
+              </p>
+              <div className="space-y-2">
+                {customFields.map((field) => (
+                  <div
+                    key={field.key}
+                    className="rounded-xl border border-border px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <input
+                          value={field.label}
+                          onChange={(e) =>
+                            toggleField(field.key, { label: e.target.value })
+                          }
+                          className="w-full rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium outline-none focus:border-primary"
+                          placeholder="Field label"
+                        />
+                        <p className="text-[11px] capitalize text-muted-foreground">
+                          Type: {field.type}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCustomField(field.key)}
+                        className="rounded-lg border border-border px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={field.enabled}
+                          onChange={(e) =>
+                            toggleField(field.key, {
+                              enabled: e.target.checked,
+                            })
+                          }
+                          className="size-3.5 accent-[#4B1D6E]"
+                        />
+                        Show
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={field.required}
+                          disabled={!field.enabled}
+                          onChange={(e) =>
+                            toggleField(field.key, {
+                              required: e.target.checked,
+                            })
+                          }
+                          className="size-3.5 accent-[#4B1D6E]"
+                        />
+                        Required
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 sm:flex-row sm:items-end">
+                <label className="block flex-1 text-sm">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Field label
+                  </span>
+                  <input
+                    value={newCustomLabel}
+                    onChange={(e) => setNewCustomLabel(e.target.value)}
+                    placeholder="e.g. Unit number"
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <label className="block text-sm sm:w-40">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Type
+                  </span>
+                  <select
+                    value={newCustomType}
+                    onChange={(e) =>
+                      setNewCustomType(
+                        e.target.value as MemberRegistrationField['type'],
+                      )
+                    }
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="text">Text</option>
+                    <option value="textarea">Long text</option>
+                    <option value="email">Email</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="image">Image</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={addCustomField}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-white px-4 py-2.5 text-sm font-semibold text-primary hover:bg-secondary"
+                >
+                  <Plus className="size-4" />
+                  Add field
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-primary/15 bg-secondary/50 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                Registration link
+              </p>
+              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                {registrationUrl || '—'}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void copyLink()
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold hover:bg-muted"
+                >
+                  {copied ? (
+                    <Check className="size-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="size-4 text-primary" />
+                  )}
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
+                <a
+                  href={registrationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold hover:bg-muted"
+                >
+                  <Link2 className="size-4 text-primary" />
+                  Open link
+                </a>
+              </div>
+
+              <div className="mt-4 border-t border-border/70 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Send link to a member
+                </p>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    value={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.value)}
+                    placeholder="member@email.com"
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="button"
+                    disabled={!sendEmail.trim() || !registrationUrl}
+                    onClick={openMail}
+                    className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-60"
+                  >
+                    Send email
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Opens your email app with the registration link ready to send.
+                </p>
+              </div>
+            </div>
+
+            {error ? (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {error}
+              </p>
+            ) : null}
+            {success ? (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                {success}
+              </p>
+            ) : null}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold hover:bg-muted"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-60"
+              >
+                {saveMutation.isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : null}
+                Save fields
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function axiosMessage(error: unknown, fallback: string): string {
   if (!axios.isAxiosError(error)) return fallback
@@ -893,7 +1372,12 @@ function MissedBillsTable({ bills }: { bills: CustomerBillRow[] }) {
                 {bill.due_on_label || '—'}
               </td>
               <td className="px-3 py-2.5 font-semibold text-rose-700">
-                {bill.balance_label}
+                <p>{bill.balance_label}</p>
+                {bill.has_penalty && (bill.penalty_amount ?? 0) > 0 ? (
+                  <p className="mt-0.5 text-[11px] font-medium text-amber-800">
+                    incl. penalty {bill.penalty_amount_label}
+                  </p>
+                ) : null}
               </td>
               <td className="px-3 py-2.5">
                 <span
@@ -1127,6 +1611,30 @@ function CustomerViewModal({
                   label="Account credit"
                   value={detail.credit_balance_label}
                 />
+                {Object.entries(detail.custom_fields ?? {}).map(
+                  ([key, item]) =>
+                    item.type === 'image' && item.url ? (
+                      <div
+                        key={key}
+                        className="rounded-2xl border border-border/80 bg-muted/30 px-3.5 py-3"
+                      >
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {item.label || key}
+                        </p>
+                        <img
+                          src={item.url}
+                          alt={item.label || key}
+                          className="mt-2 max-h-40 rounded-xl border border-border object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <InfoRow
+                        key={key}
+                        label={item.label || key}
+                        value={item.value || '—'}
+                      />
+                    ),
+                )}
               </section>
 
               <section className="grid gap-3 sm:grid-cols-3">
@@ -1232,6 +1740,7 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1)
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [registrationOpen, setRegistrationOpen] = useState(false)
   const [selected, setSelected] = useState<Customer | null>(null)
   const [formError, setFormError] = useState('')
   const [banner, setBanner] = useState('')
@@ -1310,6 +1819,17 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setBanner('')
+                setRegistrationOpen(true)
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary"
+            >
+              <Link2 className="size-4" />
+              Registration
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1468,6 +1988,13 @@ export default function CustomersPage() {
           ) : null}
         </section>
       </div>
+
+      {registrationOpen ? (
+        <RegistrationModal
+          open
+          onClose={() => setRegistrationOpen(false)}
+        />
+      ) : null}
 
       {uploadOpen ? (
         <UploadMembersModal

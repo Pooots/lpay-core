@@ -13,6 +13,7 @@ import StatusPage from '@/routes/StatusPage'
 import HomePage from '@/routes/HomePage'
 import MerchantPayPage from '@/routes/MerchantPayPage'
 import CustomerProfilePage from '@/routes/CustomerProfilePage'
+import MemberRegisterPage from '@/routes/MemberRegisterPage'
 import CheckoutPage from '@/routes/CheckoutPage'
 import PaymentSuccessPage from '@/routes/PaymentSuccessPage'
 import PaymentCancelPage from '@/routes/PaymentCancelPage'
@@ -78,6 +79,12 @@ const accountRoute = createRoute({
     paid: typeof search.paid === 'string' ? search.paid.trim() : undefined,
   }),
   component: CustomerProfilePage,
+})
+
+const memberRegisterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/register/$merchantCode',
+  component: MemberRegisterPage,
 })
 
 const checkoutRoute = createRoute({
@@ -276,6 +283,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   merchantPayRoute,
   accountRoute,
+  memberRegisterRoute,
   checkoutRoute,
   paymentSuccessRoute,
   paymentCancelRoute,

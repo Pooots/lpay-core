@@ -1,8 +1,11 @@
 import { adminApi } from '@/lib/api'
 import type {
   CommissionHistoryRow,
+  CurrencyConversionSettings,
   GatewayRatesSettings,
   MerchantCommissionSettings,
+  MerchantPlan,
+  MerchantPlanPayload,
   PaymentMethodsSettings,
 } from '@/types/platformSettings'
 
@@ -65,5 +68,53 @@ export const platformSettingsService = {
       payload,
     )
     return data.data
+  },
+
+  async getCurrencyConversion(): Promise<CurrencyConversionSettings> {
+    const { data } = await adminApi.get<DataResponse<CurrencyConversionSettings>>(
+      '/admin/super/settings/currency-conversion',
+    )
+    return data.data
+  },
+
+  async updateCurrencyConversion(payload: {
+    enabled: boolean
+    rates: Array<{ code: string; label?: string; rate: number }>
+  }): Promise<CurrencyConversionSettings> {
+    const { data } = await adminApi.put<DataResponse<CurrencyConversionSettings>>(
+      '/admin/super/settings/currency-conversion',
+      payload,
+    )
+    return data.data
+  },
+
+  async listPlans(): Promise<MerchantPlan[]> {
+    const { data } = await adminApi.get<DataResponse<MerchantPlan[]>>(
+      '/admin/super/settings/plans',
+    )
+    return data.data
+  },
+
+  async createPlan(payload: MerchantPlanPayload): Promise<MerchantPlan> {
+    const { data } = await adminApi.post<DataResponse<MerchantPlan>>(
+      '/admin/super/settings/plans',
+      payload,
+    )
+    return data.data
+  },
+
+  async updatePlan(
+    uuid: string,
+    payload: MerchantPlanPayload,
+  ): Promise<MerchantPlan> {
+    const { data } = await adminApi.put<DataResponse<MerchantPlan>>(
+      `/admin/super/settings/plans/${uuid}`,
+      payload,
+    )
+    return data.data
+  },
+
+  async deletePlan(uuid: string): Promise<void> {
+    await adminApi.delete(`/admin/super/settings/plans/${uuid}`)
   },
 }

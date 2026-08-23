@@ -56,3 +56,48 @@ export type GatewayRatesSettings = {
   paymongo_updated_at: string | null
   paypal_updated_at: string | null
 }
+
+export type CurrencyRateRow = {
+  code: string
+  label: string
+  rate: number
+}
+
+export type CurrencyConversionSettings = {
+  base_currency: string
+  enabled: boolean
+  rates: CurrencyRateRow[]
+  updated_at: string | null
+}
+
+export type MerchantPlan = {
+  uuid: string
+  name: string
+  code: string
+  description: string | null
+  member_min: number
+  member_max: number | null
+  member_range_label: string
+  monthly_fee: number
+  monthly_fee_label: string
+  is_active: boolean
+  is_default: boolean
+  sort_order: number
+  features: string[]
+  merchants_count: number
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type MerchantPlanPayload = {
+  name: string
+  code?: string
+  description?: string | null
+  member_min: number
+  member_max?: number | null
+  monthly_fee?: number
+  is_active?: boolean
+  is_default?: boolean
+  sort_order?: number
+  features?: string[]
+}

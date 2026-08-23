@@ -321,12 +321,22 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Original amount
+                      Bill amount
                     </dt>
                     <dd className="mt-1 font-medium text-foreground">
-                      {bill.amount_label}
+                      {bill.principal_amount_label ?? bill.amount_label}
                     </dd>
                   </div>
+                  {bill.has_penalty && (bill.penalty_amount ?? 0) > 0 ? (
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Overdue penalty
+                      </dt>
+                      <dd className="mt-1 font-semibold text-amber-800">
+                        {bill.penalty_amount_label}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Balance due
@@ -336,6 +346,12 @@ export default function CheckoutPage() {
                     </dd>
                   </div>
                 </dl>
+                {bill.has_penalty && (bill.penalty_amount ?? 0) > 0 ? (
+                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    This bill is overdue. Penalty of {bill.penalty_amount_label}{' '}
+                    is included in the balance due.
+                  </p>
+                ) : null}
               </div>
 
               <div>

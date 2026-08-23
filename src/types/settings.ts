@@ -111,9 +111,41 @@ export type MerchantSettingsData = {
   bills_sets: BillsSetItem[]
   bills_set: BillsSetItem | { configured: false; preview: null }
   commissions: MerchantCommissionView
+  penalty?: MerchantPenaltySettings
   payment_gateway?: MerchantPaymentGatewaySettings
   payment_methods: MerchantPaymentMethodItem[]
   rates: MerchantRatesSettings
+}
+
+export type PenaltyAmountType = 'fixed' | 'percentage'
+export type PenaltyApplyMode = 'one_time' | 'daily' | 'weekly' | 'monthly'
+export type PenaltyApplyBase = 'balance' | 'original_amount'
+
+export type MerchantPenaltySettings = {
+  enabled: boolean
+  amount_type: PenaltyAmountType
+  amount: number
+  amount_label: string
+  grace_days: number
+  apply_mode: PenaltyApplyMode
+  apply_mode_label: string
+  apply_base: PenaltyApplyBase
+  apply_base_label: string
+  max_penalty: number | null
+  max_penalty_label: string | null
+  notes: string | null
+  flow_summary: string
+}
+
+export type UpdateMerchantPenaltyPayload = {
+  enabled: boolean
+  amount_type: PenaltyAmountType
+  amount: number
+  grace_days: number
+  apply_mode: PenaltyApplyMode
+  apply_base: PenaltyApplyBase
+  max_penalty?: number | null
+  notes?: string | null
 }
 
 export type MerchantPaymentGatewaySettings = {

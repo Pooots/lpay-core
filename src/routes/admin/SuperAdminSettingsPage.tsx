@@ -5,15 +5,22 @@ import {
   Building2,
   CreditCard,
   LoaderCircle,
+  Pencil,
   Percent,
+  Plus,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
+import { useDialog } from '@/components/ui/AppDialog'
 import { platformSettingsService } from '@/services/platformSettingsService'
 import type {
   CommissionType,
+  CurrencyRateRow,
   GatewayRatesSettings,
   MerchantCommissionSettings,
+  MerchantPlan,
+  MerchantPlanPayload,
   PaymentMethodItem,
 } from '@/types/platformSettings'
 import { cn } from '@/lib/utils'
@@ -22,12 +29,14 @@ type SettingsTab =
   | 'merchant'
   | 'payment-methods'
   | 'rates'
+  | 'plans'
   | 'currency'
 
 const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: 'merchant', label: 'Merchant settings' },
   { id: 'payment-methods', label: 'Default payment methods' },
   { id: 'rates', label: 'Rates Settings' },
+  { id: 'plans', label: 'Plan settings' },
   { id: 'currency', label: 'Currency conversion' },
 ]
 
@@ -794,13 +803,622 @@ function RatesSettingsTab() {
 }
 
 function CurrencyTab() {
+  const queryClient = useQueryClient()
+  const [enabled, setEnabled] = useState(true)
+  const [rates, setRates] = useState<CurrencyRateRow[]>([])
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const currencyQuery = useQuery({
+    queryKey: ['platform-currency-conversion'],
+    queryFn: () => platformSettingsService.getCurrencyConversion(),
+  })
+
+  useEffect(() => {
+    if (!currencyQuery.data) return
+    setEnabled(currencyQuery.data.enabled)
+    setRates(
+      currencyQuery.data.rates.map((row) => ({
+        code: row.code,
+        label: row.label,
+        rate: row.rate,
+      })),
+    )
+  }, [currencyQuery.data])
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      platformSettingsService.updateCurrencyConversion({
+        enabled,
+        rates: rates.map((row) => ({
+          code: row.code.trim().toUpperCase(),
+          label: row.label.trim() || row.code.trim().toUpperCase(),
+          rate: Number(row.rate) || 0,
+        })),
+      }),
+    onSuccess: async () => {
+      setError('')
+      setSuccess('Currency conversion rates saved.')
+      await queryClient.invalidateQueries({
+        queryKey: ['platform-currency-conversion'],
+      })
+    },
+    onError: (err) => {
+      setSuccess('')
+      setError(axiosMessage(err, 'Unable to save currency conversion.'))
+    },
+  })
+
+  const updatedLabel = formatUpdatedAt(currencyQuery.data?.updated_at)
+
   return (
-    <section className="rounded-2xl border border-border bg-white px-6 py-16 text-center shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)]">
-      <RefreshCw className="mx-auto size-10 text-primary/40" />
-      <p className="mt-4 text-lg font-semibold text-foreground">Coming soon..</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Currency conversion controls will be available here.
-      </p>
+    <section className="space-y-4">
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">
+              Currency conversion
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set how many Philippine pesos (₱) equal 1 unit of each foreign
+              currency. Base currency is always PHP.
+            </p>
+            {updatedLabel ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Last updated {updatedLabel}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Enabled</span>
+            <Toggle checked={enabled} onChange={setEnabled} />
+          </div>
+        </div>
+
+        {currencyQuery.isLoading ? (
+          <div className="mt-8 flex items-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+            Loading rates…
+          </div>
+        ) : (
+          <div className="mt-6 space-y-3">
+            {rates.map((row, index) => (
+              <div
+                key={`${row.code}-${index}`}
+                className="grid gap-3 rounded-xl border border-border p-3 sm:grid-cols-[100px_1fr_140px_auto]"
+              >
+                <input
+                  value={row.code}
+                  onChange={(e) => {
+                    const next = [...rates]
+                    next[index] = {
+                      ...row,
+                      code: e.target.value.toUpperCase().slice(0, 3),
+                    }
+                    setRates(next)
+                  }}
+                  placeholder="USD"
+                  className="rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold uppercase outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+                <input
+                  value={row.label}
+                  onChange={(e) => {
+                    const next = [...rates]
+                    next[index] = { ...row, label: e.target.value }
+                    setRates(next)
+                  }}
+                  placeholder="US Dollar"
+                  className="rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    ₱
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    value={row.rate}
+                    onChange={(e) => {
+                      const next = [...rates]
+                      next[index] = {
+                        ...row,
+                        rate: Number(e.target.value) || 0,
+                      }
+                      setRates(next)
+                    }}
+                    className="w-full rounded-xl border border-border bg-white py-2 pl-7 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRates((current) =>
+                      current.filter((_, i) => i !== index),
+                    )
+                  }
+                  className="inline-flex size-10 items-center justify-center rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50"
+                  aria-label="Remove rate"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={() =>
+                setRates((current) => [
+                  ...current,
+                  { code: '', label: '', rate: 0 },
+                ])
+              }
+              className="inline-flex items-center gap-2 rounded-xl border border-dashed border-primary/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-secondary"
+            >
+              <Plus className="size-4" />
+              Add currency
+            </button>
+          </div>
+        )}
+
+        {error ? (
+          <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            disabled={saveMutation.isPending || currencyQuery.isLoading}
+            onClick={() => saveMutation.mutate()}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-60"
+          >
+            {saveMutation.isPending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            Save conversion rates
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const PLAN_FEATURE_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: 'members', label: 'Members' },
+  { id: 'generate_bills', label: 'Generate bills' },
+  { id: 'tracker', label: 'Payment tracker' },
+  { id: 'payments', label: 'Payments' },
+  { id: 'manual_payment', label: 'Manual payment' },
+  { id: 'accounting', label: 'Accounting' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'priority_support', label: 'Priority support' },
+]
+
+function emptyPlanForm(): MerchantPlanPayload & {
+  member_max_input: string
+} {
+  return {
+    name: '',
+    code: '',
+    description: '',
+    member_min: 1,
+    member_max_input: '',
+    monthly_fee: 0,
+    is_active: true,
+    is_default: false,
+    sort_order: 0,
+    features: [],
+  }
+}
+
+function PlanSettingsTab() {
+  const dialog = useDialog()
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState<MerchantPlan | null>(null)
+  const [form, setForm] = useState(emptyPlanForm())
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const plansQuery = useQuery({
+    queryKey: ['platform-merchant-plans'],
+    queryFn: () => platformSettingsService.listPlans(),
+  })
+
+  useEffect(() => {
+    if (!editing) {
+      setForm(emptyPlanForm())
+      return
+    }
+    setForm({
+      name: editing.name,
+      code: editing.code,
+      description: editing.description ?? '',
+      member_min: editing.member_min,
+      member_max_input:
+        editing.member_max === null ? '' : String(editing.member_max),
+      monthly_fee: editing.monthly_fee,
+      is_active: editing.is_active,
+      is_default: editing.is_default,
+      sort_order: editing.sort_order,
+      features: editing.features ?? [],
+    })
+  }, [editing])
+
+  const toggleFeature = (featureId: string, checked: boolean) => {
+    setForm((current) => {
+      const selected = new Set(current.features ?? [])
+      if (checked) selected.add(featureId)
+      else selected.delete(featureId)
+      return { ...current, features: Array.from(selected) }
+    })
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const maxRaw = form.member_max_input.trim()
+      const payload: MerchantPlanPayload = {
+        name: form.name.trim(),
+        code: form.code?.trim() || undefined,
+        description: form.description?.trim() || null,
+        member_min: Number(form.member_min) || 1,
+        member_max: maxRaw === '' ? null : Number(maxRaw),
+        monthly_fee: Number(form.monthly_fee) || 0,
+        is_active: Boolean(form.is_active),
+        is_default: Boolean(form.is_default),
+        sort_order: Number(form.sort_order) || 0,
+        features: form.features ?? [],
+      }
+      if (editing) {
+        return platformSettingsService.updatePlan(editing.uuid, payload)
+      }
+      return platformSettingsService.createPlan(payload)
+    },
+    onSuccess: async () => {
+      setError('')
+      setSuccess(editing ? 'Plan updated.' : 'Plan created.')
+      setEditing(null)
+      setForm(emptyPlanForm())
+      await queryClient.invalidateQueries({
+        queryKey: ['platform-merchant-plans'],
+      })
+    },
+    onError: (err) => {
+      setSuccess('')
+      setError(axiosMessage(err, 'Unable to save plan.'))
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (uuid: string) => platformSettingsService.deletePlan(uuid),
+    onSuccess: async () => {
+      setSuccess('Plan deleted.')
+      await queryClient.invalidateQueries({
+        queryKey: ['platform-merchant-plans'],
+      })
+    },
+    onError: async (err) => {
+      await dialog.alert({
+        title: 'Unable to delete',
+        message: axiosMessage(err, 'Unable to delete plan.'),
+        tone: 'danger',
+      })
+    },
+  })
+
+  const plans = plansQuery.data ?? []
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Plan settings</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create merchant plans with member capacity (e.g. 1–100, 101–500).
+              Assign a plan to each merchant from Merchant details.
+            </p>
+          </div>
+          {editing ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null)
+                setForm(emptyPlanForm())
+                setError('')
+              }}
+              className="text-sm font-semibold text-primary hover:underline"
+            >
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Plan name
+            </span>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Starter"
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Code
+            </span>
+            <input
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              placeholder="starter (optional)"
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="block text-sm sm:col-span-2">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Description
+            </span>
+            <textarea
+              value={form.description ?? ''}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
+              rows={2}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Members min
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={form.member_min}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  member_min: Number(e.target.value) || 1,
+                }))
+              }
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Members max
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={form.member_max_input}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, member_max_input: e.target.value }))
+              }
+              placeholder="Blank = unlimited"
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-foreground">
+              Monthly fee (₱)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.monthly_fee}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  monthly_fee: Number(e.target.value) || 0,
+                }))
+              }
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <div className="block text-sm sm:col-span-2">
+            <span className="mb-2 block font-medium text-foreground">
+              Features
+            </span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PLAN_FEATURE_OPTIONS.map((feature) => {
+                const checked = (form.features ?? []).includes(feature.id)
+                return (
+                  <label
+                    key={feature.id}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition',
+                      checked
+                        ? 'border-primary/40 bg-secondary/60'
+                        : 'border-border bg-white hover:border-primary/30',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        toggleFeature(feature.id, e.target.checked)
+                      }
+                      className="size-4 rounded border-border text-primary accent-[#4B1D6E]"
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      {feature.label}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-5">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <Toggle
+              checked={Boolean(form.is_active)}
+              onChange={(next) => setForm((f) => ({ ...f, is_active: next }))}
+            />
+            Active
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <Toggle
+              checked={Boolean(form.is_default)}
+              onChange={(next) => setForm((f) => ({ ...f, is_default: next }))}
+            />
+            Default for new merchants
+          </label>
+        </div>
+
+        {error ? (
+          <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </p>
+        ) : null}
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            disabled={saveMutation.isPending || !form.name.trim()}
+            onClick={() => saveMutation.mutate()}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-60"
+          >
+            {saveMutation.isPending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : editing ? (
+              <Pencil className="size-4" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {editing ? 'Update plan' : 'Create plan'}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+        <h3 className="text-base font-bold text-foreground">Existing plans</h3>
+        {plansQuery.isLoading ? (
+          <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+            Loading plans…
+          </div>
+        ) : plans.length === 0 ? (
+          <p className="mt-6 text-sm text-muted-foreground">No plans yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th className="pb-3 pr-4">Plan</th>
+                  <th className="pb-3 pr-4">Members</th>
+                  <th className="pb-3 pr-4">Fee</th>
+                  <th className="pb-3 pr-4">Merchants</th>
+                  <th className="pb-3 pr-4">Status</th>
+                  <th className="pb-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plans.map((plan) => (
+                  <tr
+                    key={plan.uuid}
+                    className="border-b border-border/70 last:border-0"
+                  >
+                    <td className="py-3.5 pr-4">
+                      <p className="font-semibold text-foreground">
+                        {plan.name}
+                      </p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        {plan.code}
+                      </p>
+                      {plan.description ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {plan.description}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="py-3.5 pr-4 text-muted-foreground">
+                      {plan.member_range_label}
+                    </td>
+                    <td className="py-3.5 pr-4 font-medium">
+                      {plan.monthly_fee_label}
+                    </td>
+                    <td className="py-3.5 pr-4">{plan.merchants_count}</td>
+                    <td className="py-3.5 pr-4">
+                      <div className="flex flex-wrap gap-1.5">
+                        <span
+                          className={cn(
+                            'inline-flex rounded-full px-2.5 py-1 text-xs font-medium',
+                            plan.is_active
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-secondary text-muted-foreground',
+                          )}
+                        >
+                          {plan.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        {plan.is_default ? (
+                          <span className="inline-flex rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-primary">
+                            Default
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="py-3.5 text-right">
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing(plan)
+                            setError('')
+                            setSuccess('')
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+                        >
+                          <Pencil className="size-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            void (async () => {
+                              const ok = await dialog.confirm({
+                                title: 'Delete plan',
+                                message: `Delete plan “${plan.name}”? Merchants on this plan must be reassigned first.`,
+                                confirmLabel: 'Delete',
+                                cancelLabel: 'Cancel',
+                                tone: 'danger',
+                              })
+                              if (ok) deleteMutation.mutate(plan.uuid)
+                            })()
+                          }}
+                          className="inline-flex size-8 items-center justify-center rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
@@ -816,6 +1434,8 @@ export default function SuperAdminSettingsPage() {
         return <PaymentMethodsTab />
       case 'rates':
         return <RatesSettingsTab />
+      case 'plans':
+        return <PlanSettingsTab />
       case 'currency':
         return <CurrencyTab />
       default:
