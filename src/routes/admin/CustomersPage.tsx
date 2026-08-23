@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { customerService } from '@/services/customerService'
 import type {
   Customer,
@@ -23,6 +24,7 @@ import type {
   CustomerStatus,
   CustomerTransactionRow,
 } from '@/types/customer'
+import { emptyPaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
 
 type ModalMode = 'create' | 'edit' | 'view' | null
@@ -1227,6 +1229,7 @@ export default function CustomersPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [selected, setSelected] = useState<Customer | null>(null)
@@ -1234,13 +1237,21 @@ export default function CustomersPage() {
   const [banner, setBanner] = useState('')
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250)
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [search])
 
   const customersQuery = useQuery({
-    queryKey: ['merchant-customers', debouncedSearch],
-    queryFn: () => customerService.list(debouncedSearch || undefined),
+    queryKey: ['merchant-customers', debouncedSearch, page],
+    queryFn: () =>
+      customerService.list({
+        q: debouncedSearch || undefined,
+        page,
+        per_page: 10,
+      }),
   })
 
   const createMutation = useMutation({
@@ -1280,9 +1291,11 @@ export default function CustomersPage() {
   })
 
   const customers = useMemo(
-    () => customersQuery.data ?? [],
+    () => customersQuery.data?.data ?? [],
     [customersQuery.data],
   )
+  const paginationMeta =
+    customersQuery.data?.meta ?? emptyPaginationMeta(10)
 
   return (
     <MerchantShell>
@@ -1445,6 +1458,14 @@ export default function CustomersPage() {
               </table>
             </div>
           )}
+          {!customersQuery.isLoading && !customersQuery.isError ? (
+            <TablePagination
+              meta={paginationMeta}
+              onPageChange={setPage}
+              disabled={customersQuery.isFetching}
+              label="members"
+            />
+          ) : null}
         </section>
       </div>
 

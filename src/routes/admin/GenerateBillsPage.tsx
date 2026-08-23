@@ -19,11 +19,13 @@ import {
   VariableBillSetModal,
 } from '@/components/admin/BillSetGenerateFlow'
 import { useDialog } from '@/components/ui/AppDialog'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { billService } from '@/services/billService'
 import { customerService } from '@/services/customerService'
 import { settingsService } from '@/services/settingsService'
 import type { Bill, BillPayload, BillStatus, GenerateBillsPayload } from '@/types/bill'
 import type { Customer } from '@/types/customer'
+import { emptyPaginationMeta } from '@/types/pagination'
 import type { BillsSetItem, BillsSetPreview } from '@/types/settings'
 import { cn } from '@/lib/utils'
 
@@ -204,7 +206,7 @@ function BillFormModal({
 }) {
   const customersQuery = useQuery({
     queryKey: ['merchant-customers-options'],
-    queryFn: () => customerService.list(),
+    queryFn: () => customerService.listAll(),
     enabled: open && (mode === 'create' || mode === 'single'),
   })
 
@@ -1231,6 +1233,7 @@ export default function GenerateBillsPage() {
   const dialog = useDialog()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [manualEntry, setManualEntry] = useState(false)
   const [selected, setSelected] = useState<Bill | null>(null)
@@ -1243,13 +1246,21 @@ export default function GenerateBillsPage() {
   const [runningFixedUuid, setRunningFixedUuid] = useState<string | null>(null)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250)
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [search])
 
   const billsQuery = useQuery({
-    queryKey: ['merchant-bills', debouncedSearch],
-    queryFn: () => billService.list(debouncedSearch || undefined),
+    queryKey: ['merchant-bills', debouncedSearch, page],
+    queryFn: () =>
+      billService.list({
+        q: debouncedSearch || undefined,
+        page,
+        per_page: 10,
+      }),
   })
 
   const runFixedMutation = useMutation({
@@ -1365,7 +1376,11 @@ export default function GenerateBillsPage() {
     },
   })
 
-  const bills = useMemo(() => billsQuery.data ?? [], [billsQuery.data])
+  const bills = useMemo(
+    () => billsQuery.data?.data ?? [],
+    [billsQuery.data],
+  )
+  const paginationMeta = billsQuery.data?.meta ?? emptyPaginationMeta(10)
 
   return (
     <MerchantShell>
@@ -1532,6 +1547,14 @@ export default function GenerateBillsPage() {
               </table>
             </div>
           )}
+          {!billsQuery.isLoading && !billsQuery.isError ? (
+            <TablePagination
+              meta={paginationMeta}
+              onPageChange={setPage}
+              disabled={billsQuery.isFetching}
+              label="bills"
+            />
+          ) : null}
         </section>
       </div>
 

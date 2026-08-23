@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -12,12 +12,27 @@ import {
   X,
 } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { accountingService } from '@/services/accountingService'
 import type {
   AccountingPayout,
   AccountingTransaction,
 } from '@/types/accounting'
+import { paginateArray } from '@/types/pagination'
 import { cn } from '@/lib/utils'
+
+function useClientPage<T>(items: T[], pageSize = 10) {
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [items])
+
+  return {
+    ...paginateArray(items, page, pageSize),
+    setPage,
+  }
+}
 
 export default function AccountingPage() {
   const queryClient = useQueryClient()
@@ -62,6 +77,27 @@ export default function AccountingPage() {
     () => accountingQuery.data?.released_payouts ?? [],
     [accountingQuery.data],
   )
+
+  const availablePage = useClientPage(availableTransactions)
+  const merchantDirectPage = useClientPage(merchantDirectTransactions)
+  const releasedPage = useClientPage(releasedPayouts)
+
+  const pendingItems = useMemo(
+    () => [
+      ...pendingTransactions.map((tx) => ({
+        kind: 'tx' as const,
+        key: tx.uuid,
+        tx,
+      })),
+      ...pendingPayouts.map((payout) => ({
+        kind: 'payout' as const,
+        key: payout.uuid,
+        payout,
+      })),
+    ],
+    [pendingTransactions, pendingPayouts],
+  )
+  const pendingPage = useClientPage(pendingItems)
 
   const payoutMutation = useMutation({
     mutationFn: () => accountingService.requestPayout(),
@@ -282,8 +318,15 @@ export default function AccountingPage() {
             emptyTitle="No direct collections yet"
             emptyHint="When customers pay through your gateway or OTC, they appear here."
             isEmpty={merchantDirectTransactions.length === 0}
+            footer={
+              <TablePagination
+                meta={merchantDirectPage.meta}
+                onPageChange={merchantDirectPage.setPage}
+                label="transactions"
+              />
+            }
           >
-            {merchantDirectTransactions.map((tx) => (
+            {merchantDirectPage.data.map((tx) => (
               <PendingTxRow
                 key={tx.uuid}
                 transaction={tx}
@@ -299,8 +342,15 @@ export default function AccountingPage() {
               emptyTitle="No available balance"
               emptyHint="LPay transactions appear here after your settlement frequency period."
               isEmpty={availableTransactions.length === 0}
+              footer={
+                <TablePagination
+                  meta={availablePage.meta}
+                  onPageChange={availablePage.setPage}
+                  label="transactions"
+                />
+              }
             >
-              {availableTransactions.map((tx) => (
+              {availablePage.data.map((tx) => (
                 <PendingTxRow
                   key={tx.uuid}
                   transaction={tx}
@@ -317,22 +367,30 @@ export default function AccountingPage() {
               isEmpty={
                 pendingTransactions.length === 0 && pendingPayouts.length === 0
               }
+              footer={
+                <TablePagination
+                  meta={pendingPage.meta}
+                  onPageChange={pendingPage.setPage}
+                  label="items"
+                />
+              }
             >
-              {pendingTransactions.map((tx) => (
-                <PendingTxRow
-                  key={tx.uuid}
-                  transaction={tx}
-                  showAvailableOn
-                  onView={() => setSelectedTx(tx)}
-                />
-              ))}
-              {pendingPayouts.map((payout) => (
-                <PayoutRow
-                  key={payout.uuid}
-                  payout={payout}
-                  onView={() => setSelectedPayout(payout)}
-                />
-              ))}
+              {pendingPage.data.map((row) =>
+                row.kind === 'tx' ? (
+                  <PendingTxRow
+                    key={row.key}
+                    transaction={row.tx}
+                    showAvailableOn
+                    onView={() => setSelectedTx(row.tx)}
+                  />
+                ) : (
+                  <PayoutRow
+                    key={row.key}
+                    payout={row.payout}
+                    onView={() => setSelectedPayout(row.payout)}
+                  />
+                ),
+              )}
             </ListingSection>
 
             {isDual ? (
@@ -342,8 +400,15 @@ export default function AccountingPage() {
                 emptyTitle="No merchant-gateway collections"
                 emptyHint="Checkout payments via Merchant gateway and manual OTC payments show here."
                 isEmpty={merchantDirectTransactions.length === 0}
+                footer={
+                  <TablePagination
+                    meta={merchantDirectPage.meta}
+                    onPageChange={merchantDirectPage.setPage}
+                    label="transactions"
+                  />
+                }
               >
-                {merchantDirectTransactions.map((tx) => (
+                {merchantDirectPage.data.map((tx) => (
                   <PendingTxRow
                     key={tx.uuid}
                     transaction={tx}
@@ -360,8 +425,15 @@ export default function AccountingPage() {
               emptyHint="After admin releases a payout, it appears here."
               isEmpty={releasedPayouts.length === 0}
               className={isDual ? undefined : 'lg:col-span-2'}
+              footer={
+                <TablePagination
+                  meta={releasedPage.meta}
+                  onPageChange={releasedPage.setPage}
+                  label="payouts"
+                />
+              }
             >
-              {releasedPayouts.map((payout) => (
+              {releasedPage.data.map((payout) => (
                 <PayoutRow
                   key={payout.uuid}
                   payout={payout}
@@ -423,6 +495,7 @@ function ListingSection({
   isEmpty,
   children,
   className,
+  footer,
 }: {
   title: string
   subtitle: string
@@ -431,6 +504,7 @@ function ListingSection({
   isEmpty: boolean
   children: ReactNode
   className?: string
+  footer?: ReactNode
 }) {
   return (
     <section
@@ -449,7 +523,10 @@ function ListingSection({
           <p className="mt-1 text-sm text-muted-foreground">{emptyHint}</p>
         </div>
       ) : (
-        <div className="space-y-2">{children}</div>
+        <>
+          <div className="space-y-2">{children}</div>
+          {footer}
+        </>
       )}
     </section>
   )

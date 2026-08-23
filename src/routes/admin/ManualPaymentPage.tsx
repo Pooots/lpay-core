@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Banknote, Check, LoaderCircle, Search } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { customerService } from '@/services/customerService'
 import { paymentService } from '@/services/paymentService'
 import type { Customer, CustomerBillRow } from '@/types/customer'
+import { emptyPaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
 
 function axiosMessage(error: unknown, fallback: string): string {
@@ -25,6 +27,8 @@ export default function ManualPaymentPage() {
   const queryClient = useQueryClient()
   const [memberSearch, setMemberSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [memberPage, setMemberPage] = useState(1)
+  const [recentPage, setRecentPage] = useState(1)
   const [selectedMember, setSelectedMember] = useState<Customer | null>(null)
   const [billUuid, setBillUuid] = useState('')
   const [amount, setAmount] = useState('')
@@ -33,16 +37,21 @@ export default function ManualPaymentPage() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => setDebouncedSearch(memberSearch.trim()),
-      250,
-    )
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(memberSearch.trim())
+      setMemberPage(1)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [memberSearch])
 
   const membersQuery = useQuery({
-    queryKey: ['merchant-customers', debouncedSearch],
-    queryFn: () => customerService.list(debouncedSearch || undefined),
+    queryKey: ['merchant-customers', debouncedSearch, memberPage],
+    queryFn: () =>
+      customerService.list({
+        q: debouncedSearch || undefined,
+        page: memberPage,
+        per_page: 10,
+      }),
   })
 
   const detailQuery = useQuery({
@@ -74,8 +83,12 @@ export default function ManualPaymentPage() {
   }, [selectedBill?.uuid])
 
   const recentManualQuery = useQuery({
-    queryKey: ['merchant-manual-payments'],
-    queryFn: () => paymentService.listManual(),
+    queryKey: ['merchant-manual-payments', recentPage],
+    queryFn: () =>
+      paymentService.listManual({
+        page: recentPage,
+        per_page: 10,
+      }),
   })
 
   const saveMutation = useMutation({
@@ -92,6 +105,7 @@ export default function ManualPaymentPage() {
         `Manual payment ${payment.reference_number} recorded for ${payment.customer_name}.`,
       )
       setNotes('')
+      setRecentPage(1)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['merchant-manual-payments'] }),
         queryClient.invalidateQueries({ queryKey: ['merchant-payments'] }),
@@ -151,8 +165,10 @@ export default function ManualPaymentPage() {
     saveMutation.mutate()
   }
 
-  const members = membersQuery.data ?? []
+  const members = membersQuery.data?.data ?? []
+  const membersMeta = membersQuery.data?.meta ?? emptyPaginationMeta(10)
   const recent = recentManualQuery.data?.data ?? []
+  const recentMeta = recentManualQuery.data?.meta ?? emptyPaginationMeta(10)
 
   return (
     <MerchantShell>
@@ -215,6 +231,15 @@ export default function ManualPaymentPage() {
                 })
               )}
             </div>
+            {!membersQuery.isLoading ? (
+              <TablePagination
+                meta={membersMeta}
+                onPageChange={setMemberPage}
+                disabled={membersQuery.isFetching}
+                label="members"
+                className="mt-3 border-t-0 pt-3"
+              />
+            ) : null}
           </section>
 
           <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
@@ -426,6 +451,14 @@ export default function ManualPaymentPage() {
               </table>
             </div>
           )}
+          {!recentManualQuery.isLoading ? (
+            <TablePagination
+              meta={recentMeta}
+              onPageChange={setRecentPage}
+              disabled={recentManualQuery.isFetching}
+              label="payments"
+            />
+          ) : null}
         </section>
       </div>
     </MerchantShell>

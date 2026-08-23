@@ -556,7 +556,7 @@ export function VariableBillSetModal({
 }) {
   const customersQuery = useQuery({
     queryKey: ['merchant-customers-options'],
-    queryFn: () => customerService.list(),
+    queryFn: () => customerService.listAll(),
     enabled: open && Boolean(billSet),
   })
 

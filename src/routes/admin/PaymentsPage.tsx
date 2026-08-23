@@ -12,8 +12,10 @@ import {
 } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
 import { useDialog } from '@/components/ui/AppDialog'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { paymentService } from '@/services/paymentService'
 import type { MerchantPayment, PaymentOutcome } from '@/types/payment'
+import { emptyPaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
 
 function outcomeClass(outcome: PaymentOutcome) {
@@ -127,16 +129,25 @@ export default function PaymentsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<MerchantPayment | null>(null)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250)
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [search])
 
   const paymentsQuery = useQuery({
-    queryKey: ['merchant-payments', debouncedSearch],
-    queryFn: () => paymentService.list(debouncedSearch || undefined),
+    queryKey: ['merchant-payments', debouncedSearch, page],
+    queryFn: () =>
+      paymentService.list({
+        q: debouncedSearch || undefined,
+        page,
+        per_page: 10,
+      }),
   })
 
   const voidMutation = useMutation({
@@ -171,6 +182,7 @@ export default function PaymentsPage() {
     [paymentsQuery.data],
   )
   const summary = paymentsQuery.data?.summary
+  const paginationMeta = paymentsQuery.data?.meta ?? emptyPaginationMeta(10)
 
   return (
     <MerchantShell>
@@ -346,6 +358,14 @@ export default function PaymentsPage() {
               </table>
             </div>
           )}
+          {!paymentsQuery.isLoading && !paymentsQuery.isError ? (
+            <TablePagination
+              meta={paginationMeta}
+              onPageChange={setPage}
+              disabled={paymentsQuery.isFetching}
+              label="payments"
+            />
+          ) : null}
         </section>
       </div>
 

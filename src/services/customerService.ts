@@ -7,18 +7,52 @@ import type {
   CustomerImportRow,
   CustomerPayload,
 } from '@/types/customer'
+import type { PaginatedResult, PaginationMeta } from '@/types/pagination'
+import { DEFAULT_PAGE_SIZE, emptyPaginationMeta } from '@/types/pagination'
 
-type CustomersResponse = { data: Customer[] }
+type CustomersResponse = {
+  data: Customer[]
+  meta?: PaginationMeta
+}
 type CustomerResponse = { data: Customer; message?: string }
 type CustomerDetailResponse = { data: CustomerDetail }
 type ImportResponse = { data: CustomerImportResult; message?: string }
 type ImportPreviewResponse = { data: CustomerImportPreview }
 
+export type CustomerListParams = {
+  q?: string
+  page?: number
+  per_page?: number
+  status?: string
+}
+
 export const customerService = {
-  async list(q?: string): Promise<Customer[]> {
+  async list(
+    params: CustomerListParams = {},
+  ): Promise<PaginatedResult<Customer>> {
     const { data } = await merchantApi.get<CustomersResponse>(
       '/admin/customers',
-      { params: q ? { q } : undefined },
+      {
+        params: {
+          q: params.q || undefined,
+          page: params.page ?? 1,
+          per_page: params.per_page ?? DEFAULT_PAGE_SIZE,
+          status: params.status || undefined,
+        },
+      },
+    )
+
+    return {
+      data: data.data,
+      meta: data.meta ?? emptyPaginationMeta(params.per_page ?? DEFAULT_PAGE_SIZE),
+    }
+  },
+
+  /** Full list for pickers / bulk flows (no pagination). */
+  async listAll(q?: string): Promise<Customer[]> {
+    const { data } = await merchantApi.get<CustomersResponse>(
+      '/admin/customers',
+      { params: { q: q || undefined, all: 1 } },
     )
     return data.data
   },

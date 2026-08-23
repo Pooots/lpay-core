@@ -11,7 +11,9 @@ import {
   Wallet,
 } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
+import { TablePagination } from '@/components/ui/TablePagination'
 import { trackerService } from '@/services/trackerService'
+import { emptyPaginationMeta } from '@/types/pagination'
 import type { TrackerCell, TrackerColumn } from '@/types/tracker'
 import { cn } from '@/lib/utils'
 
@@ -188,14 +190,19 @@ export default function TrackerPage() {
   const [billSetUuid, setBillSetUuid] = useState('')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => setDebouncedSearch(search.trim()),
-      250,
-    )
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [year, billSetUuid])
 
   const years = useMemo(() => {
     const list: number[] = []
@@ -206,16 +213,19 @@ export default function TrackerPage() {
   }, [currentYear])
 
   const trackerQuery = useQuery({
-    queryKey: ['merchant-tracker', year, billSetUuid, debouncedSearch],
+    queryKey: ['merchant-tracker', year, billSetUuid, debouncedSearch, page],
     queryFn: () =>
       trackerService.matrix({
         year,
         bill_set_uuid: billSetUuid || undefined,
         q: debouncedSearch || undefined,
+        page,
+        per_page: 10,
       }),
   })
 
-  const data = trackerQuery.data
+  const data = trackerQuery.data?.data
+  const paginationMeta = trackerQuery.data?.meta ?? emptyPaginationMeta(10)
   const columns = data?.columns ?? []
   const rows = data?.rows ?? []
   const summary = data?.summary
@@ -460,6 +470,14 @@ export default function TrackerPage() {
               </table>
             </div>
           )}
+          {!trackerQuery.isLoading && !trackerQuery.isError ? (
+            <TablePagination
+              meta={paginationMeta}
+              onPageChange={setPage}
+              disabled={trackerQuery.isFetching}
+              label="members"
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

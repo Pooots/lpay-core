@@ -1,12 +1,14 @@
 import { merchantApi } from '@/lib/api'
 import type { Bill, BillPayload, GenerateBillsPayload } from '@/types/bill'
+import type { PaginatedResult, PaginationMeta } from '@/types/pagination'
+import { DEFAULT_PAGE_SIZE, emptyPaginationMeta } from '@/types/pagination'
 import type {
   BillSetPeriodPreview,
   BillsSetPreview,
   RunBillSetResult,
 } from '@/types/settings'
 
-type BillsResponse = { data: Bill[] }
+type BillsResponse = { data: Bill[]; meta?: PaginationMeta }
 type BillResponse = { data: Bill; message?: string }
 type GenerateBillsResponse = {
   data: Bill[]
@@ -30,12 +32,28 @@ export type VariableBillItem = {
   amount: number
 }
 
+export type BillListParams = {
+  q?: string
+  page?: number
+  per_page?: number
+  status?: string
+}
+
 export const billService = {
-  async list(q?: string): Promise<Bill[]> {
+  async list(params: BillListParams = {}): Promise<PaginatedResult<Bill>> {
     const { data } = await merchantApi.get<BillsResponse>('/admin/bills', {
-      params: q ? { q } : undefined,
+      params: {
+        q: params.q || undefined,
+        page: params.page ?? 1,
+        per_page: params.per_page ?? DEFAULT_PAGE_SIZE,
+        status: params.status || undefined,
+      },
     })
-    return data.data
+
+    return {
+      data: data.data,
+      meta: data.meta ?? emptyPaginationMeta(params.per_page ?? DEFAULT_PAGE_SIZE),
+    }
   },
 
   async get(uuid: string): Promise<Bill> {
