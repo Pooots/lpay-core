@@ -5,6 +5,7 @@ import {
   CreditCard,
   LoaderCircle,
   Pencil,
+  Percent,
   Plus,
   RefreshCw,
   Trash2,
