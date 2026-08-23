@@ -33,9 +33,14 @@ export type MerchantDashboardSummary = {
   total_billed_label: string
   collections: number
   collections_label: string
+  online_payments?: number
+  online_payments_label?: string
+  online_payments_count?: number
   outstanding: number
   outstanding_label: string
   overdue_bills: number
+  overdue_amount?: number
+  overdue_amount_label?: string
   pending_payments: number
   pending_payments_label: string
   pending_payments_count: number

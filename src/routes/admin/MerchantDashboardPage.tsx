@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Banknote,
+  CircleDollarSign,
   Clock3,
   CreditCard,
   FileText,
@@ -227,8 +228,8 @@ export default function MerchantDashboardPage() {
       iconClass: 'bg-[#efe6f8] text-primary',
     },
     {
-      label: 'Collections',
-      value: summary?.collections_label ?? '₱0.00',
+      label: 'Online payment',
+      value: summary?.online_payments_label ?? '₱0.00',
       icon: Wallet,
       iconClass: 'bg-[#f7efd4] text-gold-foreground',
     },
@@ -290,13 +291,18 @@ export default function MerchantDashboardPage() {
               ))}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)]">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">Overdue Bills</p>
+                    <p className="text-sm text-muted-foreground">
+                      Overdue Payments
+                    </p>
                     <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-                      {summary?.overdue_bills ?? 0}
+                      {summary?.overdue_amount_label ?? '₱0.00'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {summary?.overdue_bills ?? 0} overdue bills
                     </p>
                   </div>
                   <span className="grid size-10 place-items-center rounded-xl bg-[#fce8ef] text-[#b4234a]">
@@ -314,7 +320,7 @@ export default function MerchantDashboardPage() {
                       {summary?.pending_payments_label ?? '₱0.00'}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {summary?.pending_payments_count ?? 0} awaiting confirmation
+                      {summary?.pending_payments_count ?? 0} awaiting payment
                     </p>
                   </div>
                   <span className="grid size-10 place-items-center rounded-xl bg-secondary text-primary">
@@ -337,6 +343,25 @@ export default function MerchantDashboardPage() {
                   </div>
                   <span className="grid size-10 place-items-center rounded-xl bg-[#f7efd4] text-gold-foreground">
                     <Banknote className="size-5" />
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-primary/25 bg-secondary p-5 shadow-[0_12px_32px_-20px_rgb(75_29_110_/_0.55)] ring-1 ring-primary/10">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-primary">
+                      Total Collected amounts
+                    </p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+                      {summary?.collections_label ?? '₱0.00'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Online {summary?.online_payments_label ?? '₱0.00'} · Manual{' '}
+                      {summary?.manual_payments_label ?? '₱0.00'}
+                    </p>
+                  </div>
+                  <span className="grid size-10 place-items-center rounded-xl bg-white/90 text-primary shadow-sm">
+                    <CircleDollarSign className="size-5" />
                   </span>
                 </div>
               </div>
