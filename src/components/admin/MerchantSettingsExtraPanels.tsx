@@ -151,14 +151,15 @@ export function MerchantPaymentGatewayPanel({
         provider === 'paymongo'
           ? {
               provider: 'paymongo',
-              enabled: paymongoEnabled,
+              // Own gateway is live whenever admin channels are off.
+              enabled: gateway.platform_channels_enabled ? paymongoEnabled : true,
               paymongo_public_key: publicKey.trim(),
               paymongo_secret_key: secretKey.trim(),
               paymongo_webhook_secret: webhookSecret.trim(),
             }
           : {
               provider: 'paypal',
-              enabled: paypalEnabled,
+              enabled: gateway.platform_channels_enabled ? paypalEnabled : true,
               paypal_client_id: paypalClientId.trim(),
               paypal_client_secret: paypalClientSecret.trim(),
               paypal_mode: paypalMode,
@@ -232,13 +233,17 @@ export function MerchantPaymentGatewayPanel({
                 id: 'paymongo' as const,
                 title: 'PayMongo',
                 desc: 'Cards, QR Ph, GCash, Maya, and more.',
-                ready: gateway.paymongo.ready,
+                ready: gateway.platform_channels_enabled
+                  ? gateway.paymongo.ready
+                  : gateway.paymongo.connected,
               },
               {
                 id: 'paypal' as const,
                 title: 'PayPal',
                 desc: 'Collect payments with your PayPal business account.',
-                ready: gateway.paypal.ready,
+                ready: gateway.platform_channels_enabled
+                  ? gateway.paypal.ready
+                  : gateway.paypal.connected,
               },
             ] as const
           ).map((option) => (
@@ -284,7 +289,15 @@ export function MerchantPaymentGatewayPanel({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-muted-foreground">Enable PayMongo</span>
-              <Toggle checked={paymongoEnabled} onChange={setPaymongoEnabled} disabled={busy} />
+              <Toggle
+                checked={
+                  gateway.platform_channels_enabled
+                    ? paymongoEnabled
+                    : paymongoEnabled || gateway.paymongo.connected
+                }
+                onChange={setPaymongoEnabled}
+                disabled={busy || !gateway.platform_channels_enabled}
+              />
             </div>
           </div>
 
@@ -341,7 +354,15 @@ export function MerchantPaymentGatewayPanel({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-muted-foreground">Enable PayPal</span>
-              <Toggle checked={paypalEnabled} onChange={setPaypalEnabled} disabled={busy} />
+              <Toggle
+                checked={
+                  gateway.platform_channels_enabled
+                    ? paypalEnabled
+                    : paypalEnabled || gateway.paypal.connected
+                }
+                onChange={setPaypalEnabled}
+                disabled={busy || !gateway.platform_channels_enabled}
+              />
             </div>
           </div>
 
