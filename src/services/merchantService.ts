@@ -10,6 +10,13 @@ import type { MerchantBank, MerchantBankPayload } from '@/types/settings'
 
 type MerchantsResponse = {
   data: Merchant[]
+  summary?: {
+    pending: number
+    active: number
+    suspended: number
+    expired: number
+    total: number
+  }
 }
 
 type MerchantResponse = {
@@ -26,13 +33,48 @@ type BankResponse = {
   message?: string
 }
 
+export type MerchantLifecycleFilter =
+  | 'all'
+  | 'pending'
+  | 'active'
+  | 'suspended'
+  | 'expired'
+
+export type MerchantsListResult = {
+  data: Merchant[]
+  summary: {
+    pending: number
+    active: number
+    suspended: number
+    expired: number
+    total: number
+  }
+}
+
 export const merchantService = {
-  async list(q?: string): Promise<Merchant[]> {
+  async list(
+    q?: string,
+    lifecycle?: Exclude<MerchantLifecycleFilter, 'all'>,
+  ): Promise<MerchantsListResult> {
     const { data } = await adminApi.get<MerchantsResponse>(
       '/admin/super/merchants',
-      { params: q ? { q } : undefined },
+      {
+        params: {
+          ...(q ? { q } : {}),
+          ...(lifecycle ? { lifecycle } : {}),
+        },
+      },
     )
-    return data.data
+    return {
+      data: data.data,
+      summary: data.summary ?? {
+        pending: 0,
+        active: 0,
+        suspended: 0,
+        expired: 0,
+        total: data.data.length,
+      },
+    }
   },
 
   async get(uuid: string): Promise<MerchantDetail> {

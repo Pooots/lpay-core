@@ -9,11 +9,14 @@ import {
   ChevronDown,
   KeyRound,
   LoaderCircle,
+  PauseCircle,
+  ShieldCheck,
 } from 'lucide-react'
 import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
 import { MerchantCodeQr } from '@/components/admin/MerchantCodeQr'
 import { BankDetailsPanel } from '@/components/admin/BankDetailsPanel'
 import { MerchantLogoUploader } from '@/components/admin/MerchantLogoUploader'
+import { useDialog } from '@/components/ui/AppDialog'
 import { merchantService } from '@/services/merchantService'
 import { platformSettingsService } from '@/services/platformSettingsService'
 import type { MerchantBank } from '@/types/settings'
@@ -37,30 +40,52 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'plan', label: 'Plan' },
 ]
 
-function statusBadge(status: Merchant['status']) {
+function statusBadge(status: Merchant['status'], planExpired?: boolean) {
+  if (status === 'suspended') return 'bg-rose-50 text-rose-700'
+  if (planExpired) return 'bg-amber-50 text-amber-800'
   switch (status) {
     case 'active':
       return 'bg-emerald-50 text-emerald-700'
     case 'pending':
       return 'bg-sky-50 text-sky-700'
-    case 'suspended':
-      return 'bg-rose-50 text-rose-700'
     default:
       return 'bg-secondary text-primary'
   }
 }
 
-function statusLabel(status: Merchant['status']) {
-  return status.charAt(0).toUpperCase() + status.slice(1)
+function statusLabel(status: Merchant['status'], planExpired?: boolean) {
+  if (status === 'suspended') return 'Suspend'
+  if (status === 'pending') return 'Pending'
+  if (planExpired) return 'Expired'
+  return 'Active'
+}
+
+function statusDescription(
+  status: Merchant['status'],
+  planExpired?: boolean,
+): string {
+  if (status === 'pending') {
+    return 'Waiting for plan payment or manual activation. Transactions stay disabled until activated.'
+  }
+  if (status === 'suspended') {
+    return 'This merchant cannot sign in or process transactions until reactivated.'
+  }
+  if (planExpired) {
+    return 'Account is active but plan coverage has expired. Ask them to renew under Plan, or suspend access.'
+  }
+  return 'Merchant can sign in and use modules included in their plan.'
 }
 
 export default function MerchantDetailPage() {
   const params = useParams({ strict: false }) as { uuid?: string }
   const uuid = (params.uuid ?? '').trim()
   const queryClient = useQueryClient()
+  const dialog = useDialog()
   const [tab, setTab] = useState<Tab>('profile')
   const [expandedTx, setExpandedTx] = useState<string | null>(null)
   const [expandedPayout, setExpandedPayout] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState('')
+  const [statusSuccess, setStatusSuccess] = useState('')
 
   const detailQuery = useQuery({
     queryKey: ['admin-merchant', uuid],
@@ -70,6 +95,28 @@ export default function MerchantDetailPage() {
 
   const detail = detailQuery.data
   const merchant = detail?.merchant
+
+  const statusMutation = useMutation({
+    mutationFn: (status: MerchantStatus) =>
+      merchantService.updateStatus(uuid, status),
+    onSuccess: async (_data, status) => {
+      setStatusError('')
+      setStatusSuccess(
+        status === 'active'
+          ? 'Merchant activated successfully.'
+          : 'Merchant suspended successfully.',
+      )
+      await queryClient.invalidateQueries({ queryKey: ['admin-merchant', uuid] })
+      await queryClient.invalidateQueries({ queryKey: ['admin-merchants'] })
+    },
+    onError: (error) => {
+      setStatusSuccess('')
+      const message = axios.isAxiosError(error)
+        ? (error.response?.data?.message as string | undefined)
+        : null
+      setStatusError(message ?? 'Unable to update merchant status.')
+    },
+  })
 
   const payoutActionMutation = useMutation({
     mutationFn: async ({
@@ -90,6 +137,23 @@ export default function MerchantDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ['admin-payouts'] })
     },
   })
+
+  const handleStatusAction = async (next: MerchantStatus) => {
+    if (!merchant) return
+    const activating = next === 'active'
+    const ok = await dialog.confirm({
+      title: activating ? 'Activate merchant' : 'Suspend merchant',
+      message: activating
+        ? `Activate “${merchant.name}” so they can use the platform?`
+        : `Suspend “${merchant.name}”? They will not be able to transact until reactivated.`,
+      confirmLabel: activating ? 'Activate' : 'Suspend',
+      cancelLabel: 'Cancel',
+      tone: activating ? 'default' : 'danger',
+    })
+    if (!ok) return
+    setStatusSuccess('')
+    statusMutation.mutate(next)
+  }
 
   return (
     <SuperAdminShell>
@@ -116,10 +180,16 @@ export default function MerchantDetailPage() {
                     <span
                       className={cn(
                         'rounded-full px-2.5 py-1 text-xs font-medium capitalize',
-                        statusBadge(merchant.status),
+                        statusBadge(
+                          merchant.status,
+                          Boolean(merchant.plan_expired),
+                        ),
                       )}
                     >
-                      {statusLabel(merchant.status)}
+                      {statusLabel(
+                        merchant.status,
+                        Boolean(merchant.plan_expired),
+                      )}
                     </span>
                   </div>
                   <p className="mt-1 font-mono text-xs font-semibold tracking-wide text-gold-foreground">
@@ -132,6 +202,97 @@ export default function MerchantDetailPage() {
             )}
           </div>
         </div>
+
+        {merchant ? (
+          <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)]">
+            <div className="flex flex-col gap-4 border-b border-border bg-gradient-to-br from-secondary/70 via-white to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className={cn(
+                    'mt-0.5 grid size-10 shrink-0 place-items-center rounded-xl',
+                    merchant.status === 'active' && !merchant.plan_expired
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : merchant.status === 'suspended'
+                        ? 'bg-rose-100 text-rose-700'
+                        : merchant.plan_expired
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-sky-100 text-sky-700',
+                  )}
+                >
+                  {merchant.status === 'active' && !merchant.plan_expired ? (
+                    <ShieldCheck className="size-5" />
+                  ) : merchant.status === 'suspended' ? (
+                    <PauseCircle className="size-5" />
+                  ) : (
+                    <CheckCircle2 className="size-5" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Account status
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-foreground">
+                    {statusLabel(
+                      merchant.status,
+                      Boolean(merchant.plan_expired),
+                    )}
+                  </p>
+                  <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                    {statusDescription(
+                      merchant.status,
+                      Boolean(merchant.plan_expired),
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {merchant.status === 'active' ? (
+                  <button
+                    type="button"
+                    disabled={statusMutation.isPending}
+                    onClick={() => void handleStatusAction('suspended')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:opacity-60"
+                  >
+                    {statusMutation.isPending &&
+                    statusMutation.variables === 'suspended' ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <PauseCircle className="size-4" />
+                    )}
+                    Suspend merchant
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={statusMutation.isPending}
+                    onClick={() => void handleStatusAction('active')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_10px_24px_-12px_rgb(75_29_110_/_0.7)] transition hover:bg-[#3f1860] disabled:opacity-60"
+                  >
+                    {statusMutation.isPending &&
+                    statusMutation.variables === 'active' ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="size-4 text-gold" />
+                    )}
+                    Activate merchant
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {statusError ? (
+              <div className="border-t border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 sm:px-6">
+                {statusError}
+              </div>
+            ) : null}
+            {statusSuccess ? (
+              <div className="border-t border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-800 sm:px-6">
+                {statusSuccess}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-1.5 shadow-[0_8px_24px_-20px_rgb(75_29_110_/_0.3)]">
           {TABS.map((item) => (
@@ -1247,8 +1408,9 @@ function MerchantPlanTab({
       <div className="max-w-xl">
         <h2 className="text-lg font-bold text-foreground">Merchant plan</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Assign a plan from Settings → Plan settings. Member capacity is
-          enforced when this merchant adds members.
+          New merchants start with no plan. They choose and pay under Plan after
+          login to activate modules — or assign one here from Settings → Plan
+          settings.
         </p>
 
         {error ? (
@@ -1271,7 +1433,9 @@ function MerchantPlanTab({
           </p>
           <p className="mt-1 text-muted-foreground">
             {merchant.plan_member_range_label ||
-              'Create plans in Super Admin Settings first.'}
+              (merchant.plan_uuid
+                ? 'Member capacity is enforced when this merchant adds members.'
+                : 'No plan yet — merchant selects and pays after login.')}
           </p>
         </div>
 

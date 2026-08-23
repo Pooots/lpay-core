@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import axios from 'axios'
 import {
   CheckCircle2,
@@ -34,6 +34,8 @@ const highlights = [
 
 export default function MerchantLoginPage() {
   const navigate = useNavigate()
+  const search = useSearch({ strict: false }) as { registered?: string }
+  const justRegistered = search.registered === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -89,6 +91,12 @@ export default function MerchantLoginPage() {
             onSubmit={handleSubmit}
             className="mt-8 rounded-3xl border border-border bg-white p-6 shadow-[0_20px_50px_-24px_rgb(75_29_110_/_0.35)] sm:p-8"
           >
+            {justRegistered ? (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Account created. Sign in, then choose a plan under Plan to
+                activate.
+              </div>
+            ) : null}
             {error ? (
               <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 {error}
@@ -162,6 +170,16 @@ export default function MerchantLoginPage() {
             >
               {isSubmitting ? 'Signing in…' : 'Sign in'}
             </button>
+
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              New to LPay?{' '}
+              <Link
+                to="/merchant/register"
+                className="font-semibold text-primary hover:underline"
+              >
+                Create Merchant
+              </Link>
+            </p>
           </form>
         </div>
       </section>

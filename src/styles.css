@@ -153,6 +153,122 @@ body {
   animation: status-shimmer 4s linear infinite;
 }
 
+@keyframes register-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) scale(1.04);
+  }
+}
+
+@keyframes register-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(18px, -10px, 0);
+  }
+}
+
+@keyframes register-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes register-step-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes register-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.register-orb {
+  animation: register-float 9s ease-in-out infinite;
+}
+
+.register-orb-delay {
+  animation: register-drift 11s ease-in-out infinite;
+}
+
+.register-glow {
+  animation: register-glow 5s ease-in-out infinite;
+}
+
+.register-panel-item {
+  animation: register-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.register-panel-item-1 {
+  animation-delay: 0.05s;
+}
+.register-panel-item-2 {
+  animation-delay: 0.15s;
+}
+.register-panel-item-3 {
+  animation-delay: 0.28s;
+}
+.register-panel-item-4 {
+  animation-delay: 0.4s;
+}
+.register-panel-item-5 {
+  animation-delay: 0.55s;
+}
+.register-panel-item-6 {
+  animation-delay: 0.7s;
+}
+
+.register-step {
+  animation: register-step-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.register-step-1 {
+  animation-delay: 0.45s;
+}
+.register-step-2 {
+  animation-delay: 0.58s;
+}
+.register-step-3 {
+  animation-delay: 0.71s;
+}
+
+.register-step-card {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.register-step-card:hover {
+  transform: translateX(6px);
+  background-color: rgb(255 255 255 / 0.12);
+  border-color: rgb(232 197 71 / 0.35);
+  box-shadow: 0 12px 30px -18px rgb(0 0 0 / 0.45);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .status-rise,
   .status-rise-delay,
@@ -162,7 +278,16 @@ body {
   .home-rise,
   .home-rise-delay,
   .home-rise-delay-2,
-  .home-gold-line {
+  .home-gold-line,
+  .register-orb,
+  .register-orb-delay,
+  .register-glow,
+  .register-panel-item,
+  .register-step {
     animation: none !important;
+  }
+
+  .register-step-card:hover {
+    transform: none;
   }
 }

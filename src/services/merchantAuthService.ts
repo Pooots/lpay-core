@@ -72,6 +72,28 @@ export const merchantAuthService = {
     return data
   },
 
+  async register(payload: {
+    name: string
+    email: string
+    password: string
+    password_confirmation: string
+    phone?: string
+    address?: string
+  }): Promise<MerchantAuthResponse> {
+    this.logout()
+
+    const { data } = await adminApi.post<MerchantAuthResponse>(
+      '/merchant/register',
+      payload,
+    )
+
+    localStorage.setItem(STORAGE_KEYS.token, data.access_token)
+    persistSession(data)
+    localStorage.setItem(STORAGE_KEYS.role, data.role ?? 'merchant')
+
+    return data
+  },
+
   async me(): Promise<MerchantMeResponse> {
     const { data } = await merchantApi.get<MerchantMeResponse>('/admin/me')
     persistSession(data)

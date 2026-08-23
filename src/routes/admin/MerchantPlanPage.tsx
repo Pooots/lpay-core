@@ -366,7 +366,7 @@ export default function MerchantPlanPage() {
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {current?.member_range_label ??
-                        'Ask a super admin to assign a plan, or choose one below.'}
+                        'Choose a plan below and pay to activate your modules.'}
                     </p>
                   </div>
                 </div>

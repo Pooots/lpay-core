@@ -24,6 +24,9 @@ export type Merchant = {
   plan_member_range_label?: string | null
   plan_member_min?: number | null
   plan_member_max?: number | null
+  plan_paid_through?: string | null
+  plan_paid_through_label?: string | null
+  plan_expired?: boolean
   settlement_frequency: SettlementFrequency
   settlement_frequency_label: string
   settlement_frequency_description: string

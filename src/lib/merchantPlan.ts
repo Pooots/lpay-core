@@ -57,6 +57,7 @@ export function merchantHasPlanFeature(
   plan: MerchantPlanSummary | null | undefined,
   feature: string,
 ): boolean {
+  // No plan yet: show all modules (pending is view-only via write gate / API).
   if (!plan || !plan.features_enforced) {
     return true
   }

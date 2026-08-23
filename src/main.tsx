@@ -28,6 +28,7 @@ import AdminMembersPage from '@/routes/admin/AdminMembersPage'
 import SuperAdminAnalyticsPage from '@/routes/admin/SuperAdminAnalyticsPage'
 import AdminAuditLogsPage from '@/routes/admin/AdminAuditLogsPage'
 import SuperAdminSettingsPage from '@/routes/admin/SuperAdminSettingsPage'
+import MerchantRegisterPage from '@/routes/MerchantRegisterPage'
 import MerchantLoginPage from '@/routes/admin/MerchantLoginPage'
 import MerchantDashboardPage from '@/routes/admin/MerchantDashboardPage'
 import MembersPage from '@/routes/admin/MembersPage'
@@ -148,6 +149,17 @@ const merchantLoginRoute = createRoute({
     }
   },
   component: MerchantLoginPage,
+})
+
+const merchantRegisterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/merchant/register',
+  beforeLoad: () => {
+    if (merchantAuthService.isAuthenticated()) {
+      throw redirect({ to: '/admin/dashboard' })
+    }
+  },
+  component: MerchantRegisterPage,
 })
 
 const merchantDashboardRoute = createRoute({
@@ -338,6 +350,7 @@ const routeTree = rootRoute.addChildren([
   paymentCancelRoute,
   statusRoute,
   merchantLoginRoute,
+  merchantRegisterRoute,
   merchantDashboardRoute,
   merchantCustomersRoute,
   merchantCustomersLegacyRoute,

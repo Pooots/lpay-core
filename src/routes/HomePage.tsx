@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+﻿import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowRight,
   BarChart3,
+  Building2,
   CheckCircle2,
   Clock3,
   CreditCard,
@@ -10,6 +11,8 @@ import {
   Headphones,
   Lock,
   Receipt,
+  Sparkles,
+  UserRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -175,7 +178,8 @@ export default function HomePage() {
                   'mt-2 w-full rounded-xl border border-border bg-white px-4 py-3 text-sm text-foreground outline-none transition',
                   'placeholder:text-muted-foreground/70',
                   'focus:border-primary focus:ring-2 focus:ring-primary/20',
-                  error && 'border-rose-300 focus:border-rose-400 focus:ring-rose-200',
+                  error &&
+                    'border-rose-300 focus:border-rose-400 focus:ring-rose-200',
                 )}
               />
               {error ? (
@@ -248,6 +252,75 @@ export default function HomePage() {
             </ul>
           </section>
         </div>
+
+        <section className="home-rise mt-14 border-t border-border/80 pt-12 sm:mt-16">
+          <div className="mb-6 text-center sm:mb-8 sm:text-left">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold-foreground">
+              For merchants
+            </p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Run billing on LPay
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
+              Sign in to your merchant portal, or create a new account and
+              choose a plan after your first login.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Link
+              to="/admin/login"
+              className="group relative overflow-hidden rounded-3xl border border-border bg-white p-6 shadow-[0_16px_40px_-28px_rgb(75_29_110_/_0.4)] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_22px_48px_-24px_rgb(75_29_110_/_0.45)] sm:p-7"
+            >
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full bg-secondary/80 transition group-hover:bg-secondary"
+              />
+              <div className="relative mb-5 flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_8px_20px_-8px_rgb(75_29_110_/_0.55)]">
+                <UserRound className="size-5" />
+              </div>
+              <h3 className="relative text-xl font-bold tracking-tight text-foreground">
+                Login as Merchant
+              </h3>
+              <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
+                Access your dashboard to manage members, generate bills, and
+                track collections.
+              </p>
+              <span className="relative mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                Go to merchant sign in
+                <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+
+            <Link
+              to="/merchant/register"
+              className="group relative overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-secondary via-white to-white p-6 shadow-[0_16px_40px_-28px_rgb(75_29_110_/_0.4)] transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_22px_48px_-24px_rgb(75_29_110_/_0.45)] sm:p-7"
+            >
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-6 -top-10 size-32 rounded-full bg-primary/5"
+              />
+              <div className="relative mb-5 flex size-12 items-center justify-center rounded-2xl border border-primary/20 bg-white text-primary shadow-[0_8px_20px_-10px_rgb(75_29_110_/_0.4)]">
+                <Building2 className="size-5" />
+              </div>
+              <div className="relative mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                <Sparkles className="size-3 text-gold" />
+                New merchants
+              </div>
+              <h3 className="relative text-xl font-bold tracking-tight text-foreground">
+                Create Merchant
+              </h3>
+              <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
+                Register your business, then pick a plan and pay to activate
+                modules when you sign in.
+              </p>
+              <span className="relative mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                Create merchant account
+                <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   )

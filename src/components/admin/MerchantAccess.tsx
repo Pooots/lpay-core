@@ -6,7 +6,7 @@ import type { MerchantPlanSummary } from '@/lib/merchantPlan'
 import { cn } from '@/lib/utils'
 
 export const PENDING_ONBOARDING_MESSAGE =
-  'Your merchant account is pending activation. Pay for a plan under Plan to activate, or wait for a super admin to activate your account. You can browse modules, but transactions stay disabled until then.'
+  'Your merchant account is pending activation. You can browse all modules in view-only mode. Pay for a plan under Plan to activate and unlock transactions, or wait for a super admin to activate your account.'
 
 type MerchantAccessValue = {
   status: string | null
