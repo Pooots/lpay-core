@@ -468,10 +468,12 @@ export function MerchantPaymentGatewayPanel({
 export function MerchantPaymentMethodsPanel({
   methods,
   platformChannelsEnabled = true,
+  canManageChannels = true,
   onSaved,
 }: {
   methods: MerchantPaymentMethodItem[]
   platformChannelsEnabled?: boolean
+  canManageChannels?: boolean
   onSaved: () => Promise<void>
 }) {
   const [items, setItems] = useState(methods)
@@ -518,6 +520,7 @@ export function MerchantPaymentMethodsPanel({
   })
 
   const busy = saveMutation.isPending || toggleAdminMutation.isPending
+  const togglesLocked = !canManageChannels || busy
 
   return (
     <div className="mt-6 space-y-4">
@@ -526,13 +529,13 @@ export function MerchantPaymentMethodsPanel({
           <p className="text-sm font-semibold text-foreground">Admin payment channels</p>
           <p className="text-xs text-muted-foreground">
             {platformChannelsEnabled
-              ? 'Admin channels are active. Disable all to stop using LPay rails and use your own gateway instead.'
+              ? 'Admin channels are available. Enable only the methods you want for checkout.'
               : 'Admin channels are disabled. Enable channels below for your own gateway, or turn admin channels back on.'}
           </p>
         </div>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !canManageChannels}
           onClick={() => {
             setSuccess('')
             toggleAdminMutation.mutate(!platformChannelsEnabled)
@@ -551,15 +554,20 @@ export function MerchantPaymentMethodsPanel({
         </button>
       </div>
 
-      {!platformChannelsEnabled ? (
+      {!canManageChannels ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Payment methods stay off until you choose a plan and complete plan
+          payment. After that you can enable the admin channels you need.
+        </div>
+      ) : !platformChannelsEnabled ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Admin channels are off. Connect PayMongo or PayPal under Payment Gateway, then turn on
           the channels you want for checkout.
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Choose which admin PayMongo methods appear on checkout. Methods disabled by LPay admin
-          stay locked.
+          All methods start disabled. Turn on the ones you want for checkout, then save.
+          Methods disabled by LPay admin stay locked.
         </p>
       )}
 
@@ -569,26 +577,30 @@ export function MerchantPaymentMethodsPanel({
             key={method.name}
             className={cn(
               'flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3',
-              method.locked ? 'bg-muted/40' : 'bg-white',
+              method.locked || !canManageChannels ? 'bg-muted/40' : 'bg-white',
             )}
           >
             <div>
               <p className="text-sm font-semibold text-foreground">{method.label}</p>
               <p className="text-xs text-muted-foreground">
-                {method.locked
-                  ? 'Disabled by admin'
-                  : method.value
-                    ? platformChannelsEnabled
-                      ? 'Enabled for checkout'
-                      : 'Enabled on your gateway'
-                    : 'Disabled'}
+                {!canManageChannels
+                  ? 'Available after plan payment'
+                  : method.locked
+                    ? 'Disabled by admin'
+                    : method.value
+                      ? platformChannelsEnabled
+                        ? 'Enabled for checkout'
+                        : 'Enabled on your gateway'
+                      : 'Disabled'}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {method.locked ? <Lock className="size-3.5 text-muted-foreground" /> : null}
+              {method.locked || !canManageChannels ? (
+                <Lock className="size-3.5 text-muted-foreground" />
+              ) : null}
               <Toggle
                 checked={method.value}
-                disabled={method.locked || busy}
+                disabled={method.locked || togglesLocked}
                 onChange={(value) =>
                   setItems((current) =>
                     current.map((item) =>
@@ -603,19 +615,19 @@ export function MerchantPaymentMethodsPanel({
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
       {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || !canManageChannels || !platformChannelsEnabled}
         onClick={() => {
           setSuccess('')
           saveMutation.mutate()

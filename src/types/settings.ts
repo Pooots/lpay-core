@@ -114,6 +114,8 @@ export type MerchantSettingsData = {
   penalty?: MerchantPenaltySettings
   payment_gateway?: MerchantPaymentGatewaySettings
   payment_methods: MerchantPaymentMethodItem[]
+  /** False until merchant has an active plan assignment. */
+  can_manage_payment_channels?: boolean
   rates: MerchantRatesSettings
 }
 

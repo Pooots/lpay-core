@@ -367,6 +367,9 @@ export default function SettingsPage() {
                   platformChannelsEnabled={
                     paymentGateway?.platform_channels_enabled ?? true
                   }
+                  canManageChannels={
+                    settingsQuery.data?.can_manage_payment_channels ?? false
+                  }
                   onSaved={refreshSettings}
                 />
               ) : null}
