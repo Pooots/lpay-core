@@ -5,11 +5,11 @@ import {
   AlertTriangle,
   ArrowRight,
   Banknote,
-  CircleDollarSign,
   Clock3,
   CreditCard,
   FileText,
   LoaderCircle,
+  PhilippinePeso,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -361,7 +361,7 @@ export default function MerchantDashboardPage() {
                     </p>
                   </div>
                   <span className="grid size-10 place-items-center rounded-xl bg-white/90 text-primary shadow-sm">
-                    <CircleDollarSign className="size-5" />
+                    <PhilippinePeso className="size-5" />
                   </span>
                 </div>
               </div>
