@@ -557,7 +557,8 @@ export function MerchantPaymentMethodsPanel({
       {!canManageChannels ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Payment methods stay off until you choose a plan and complete plan
-          payment. After that you can enable the admin channels you need.
+          payment. After that you can turn on admin channels and enable the
+          methods you need.
         </div>
       ) : !platformChannelsEnabled ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

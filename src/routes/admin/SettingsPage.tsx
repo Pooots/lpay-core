@@ -365,7 +365,7 @@ export default function SettingsPage() {
                 <MerchantPaymentMethodsPanel
                   methods={paymentMethods}
                   platformChannelsEnabled={
-                    paymentGateway?.platform_channels_enabled ?? true
+                    paymentGateway?.platform_channels_enabled ?? false
                   }
                   canManageChannels={
                     settingsQuery.data?.can_manage_payment_channels ?? false
