@@ -30,7 +30,7 @@ import AdminAuditLogsPage from '@/routes/admin/AdminAuditLogsPage'
 import SuperAdminSettingsPage from '@/routes/admin/SuperAdminSettingsPage'
 import MerchantLoginPage from '@/routes/admin/MerchantLoginPage'
 import MerchantDashboardPage from '@/routes/admin/MerchantDashboardPage'
-import CustomersPage from '@/routes/admin/CustomersPage'
+import MembersPage from '@/routes/admin/MembersPage'
 import GenerateBillsPage from '@/routes/admin/GenerateBillsPage'
 import TrackerPage from '@/routes/admin/TrackerPage'
 import PaymentsPage from '@/routes/admin/PaymentsPage'
@@ -38,8 +38,14 @@ import ManualPaymentPage from '@/routes/admin/ManualPaymentPage'
 import AccountingPage from '@/routes/admin/AccountingPage'
 import AnalyticsPage from '@/routes/admin/AnalyticsPage'
 import SettingsPage from '@/routes/admin/SettingsPage'
+import MerchantPlanPage from '@/routes/admin/MerchantPlanPage'
+import MerchantPlanCheckoutPage from '@/routes/admin/MerchantPlanCheckoutPage'
 import { adminAuthService } from '@/services/adminAuthService'
 import { merchantAuthService } from '@/services/merchantAuthService'
+import {
+  merchantHasPlanFeature,
+  type MerchantPlanFeature,
+} from '@/lib/merchantPlan'
 import reportWebVitals from './reportWebVitals'
 
 document.title = 'iLPay - i Will Pay'
@@ -53,6 +59,13 @@ const requireSuperAdmin = () => {
 const requireMerchant = () => {
   if (!merchantAuthService.isAuthenticated()) {
     throw redirect({ to: '/admin/login' })
+  }
+}
+
+const requireMerchantFeature = (feature: MerchantPlanFeature) => () => {
+  requireMerchant()
+  if (!merchantHasPlanFeature(merchantAuthService.getPlan(), feature)) {
+    throw redirect({ to: '/admin/dashboard' })
   }
 }
 
@@ -146,51 +159,85 @@ const merchantDashboardRoute = createRoute({
 
 const merchantCustomersRoute = createRoute({
   getParentRoute: () => rootRoute,
+  path: '/admin/member',
+  beforeLoad: requireMerchantFeature('members'),
+  component: MembersPage,
+})
+
+const merchantCustomersLegacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
   path: '/admin/customers',
-  beforeLoad: requireMerchant,
-  component: CustomersPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/admin/member' })
+  },
+  component: MembersPage,
 })
 
 const merchantGenerateBillsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/generate-bills',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('generate_bills'),
   component: GenerateBillsPage,
 })
 
 const merchantTrackerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/tracker',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('tracker'),
   component: TrackerPage,
 })
 
 const merchantPaymentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/payments',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('payments'),
   component: PaymentsPage,
 })
 
 const merchantManualPaymentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/manual-payments',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('manual_payment'),
   component: ManualPaymentPage,
 })
 
 const merchantAccountingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/accounting',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('accounting'),
   component: AccountingPage,
 })
 
 const merchantAnalyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/analytics',
-  beforeLoad: requireMerchant,
+  beforeLoad: requireMerchantFeature('analytics'),
   component: AnalyticsPage,
+})
+
+const merchantPlanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/plan',
+  beforeLoad: requireMerchant,
+  validateSearch: (search: Record<string, unknown>) => ({
+    payment:
+      typeof search.payment === 'string' ? search.payment.trim() : undefined,
+    status:
+      typeof search.status === 'string' ? search.status.trim() : undefined,
+  }),
+  component: MerchantPlanPage,
+})
+
+const merchantPlanCheckoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/plan/checkout',
+  beforeLoad: requireMerchant,
+  validateSearch: (search: Record<string, unknown>) => ({
+    kind:
+      typeof search.kind === 'string' ? search.kind.trim() : undefined,
+    plan: typeof search.plan === 'string' ? search.plan.trim() : undefined,
+  }),
+  component: MerchantPlanCheckoutPage,
 })
 
 const merchantSettingsRoute = createRoute({
@@ -293,12 +340,15 @@ const routeTree = rootRoute.addChildren([
   merchantLoginRoute,
   merchantDashboardRoute,
   merchantCustomersRoute,
+  merchantCustomersLegacyRoute,
   merchantGenerateBillsRoute,
   merchantTrackerRoute,
   merchantPaymentsRoute,
   merchantManualPaymentsRoute,
   merchantAccountingRoute,
   merchantAnalyticsRoute,
+  merchantPlanRoute,
+  merchantPlanCheckoutRoute,
   merchantSettingsRoute,
   superAdminLoginRoute,
   superAdminDashboardRoute,

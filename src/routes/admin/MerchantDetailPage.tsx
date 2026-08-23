@@ -7,6 +7,7 @@ import {
   Building2,
   CheckCircle2,
   ChevronDown,
+  KeyRound,
   LoaderCircle,
 } from 'lucide-react'
 import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
@@ -231,25 +232,141 @@ function ProfileTab({
     total_collected_label: string
   }
 }) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const passwordMutation = useMutation({
+    mutationFn: () =>
+      merchantService.update(merchant.uuid, {
+        password,
+      }),
+    onSuccess: () => {
+      setPassword('')
+      setConfirmPassword('')
+      setError('')
+      setSuccess('Merchant password updated successfully.')
+    },
+    onError: (err) => {
+      setSuccess('')
+      if (axios.isAxiosError(err)) {
+        const message = err.response?.data?.message
+        if (typeof message === 'string' && message.trim()) {
+          setError(message)
+          return
+        }
+      }
+      setError('Unable to update password. Please try again.')
+    },
+  })
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
-        <h2 className="text-lg font-bold text-foreground">Merchant profile</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Contact and account details
-        </p>
+      <div className="space-y-6">
+        <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+          <h2 className="text-lg font-bold text-foreground">Merchant profile</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Contact and account details
+          </p>
 
-        <dl className="mt-5 space-y-4 text-sm">
-          <DetailRow label="Merchant name" value={merchant.name} />
-          <DetailRow label="Merchant code" value={merchant.code} mono />
-          <DetailRow label="Role" value={merchant.role} />
-          <DetailRow label="Status" value={statusLabel(merchant.status)} />
-          <DetailRow label="Email" value={merchant.email} />
-          <DetailRow label="Phone" value={merchant.phone || '—'} />
-          <DetailRow label="Address" value={merchant.address || '—'} />
-          <DetailRow label="Joined" value={merchant.joined_label || '—'} />
-        </dl>
-      </section>
+          <dl className="mt-5 space-y-4 text-sm">
+            <DetailRow label="Merchant name" value={merchant.name} />
+            <DetailRow label="Merchant code" value={merchant.code} mono />
+            <DetailRow label="Role" value={merchant.role} />
+            <DetailRow label="Status" value={statusLabel(merchant.status)} />
+            <DetailRow label="Email" value={merchant.email} />
+            <DetailRow label="Phone" value={merchant.phone || '—'} />
+            <DetailRow label="Address" value={merchant.address || '—'} />
+            <DetailRow label="Joined" value={merchant.joined_label || '—'} />
+          </dl>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-primary">
+              <KeyRound className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-foreground">
+                Update password
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set a new login password for this merchant account
+                ({merchant.email}).
+              </p>
+            </div>
+          </div>
+
+          <form
+            className="mt-5 max-w-md space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              setError('')
+              setSuccess('')
+
+              const next = password.trim()
+              if (next.length < 8) {
+                setError('Password must be at least 8 characters.')
+                return
+              }
+              if (next !== confirmPassword.trim()) {
+                setError('Password confirmation does not match.')
+                return
+              }
+
+              passwordMutation.mutate()
+            }}
+          >
+            <Field label="New password">
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="mt-1.5 w-full rounded-xl border border-border px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </Field>
+            <Field label="Confirm password">
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                className="mt-1.5 w-full rounded-xl border border-border px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </Field>
+
+            {error ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {error}
+              </div>
+            ) : null}
+            {success ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                {success}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={passwordMutation.isPending || !password.trim()}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-[#3f1860] disabled:opacity-60"
+            >
+              {passwordMutation.isPending ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <KeyRound className="size-4 text-gold" />
+              )}
+              Update password
+            </button>
+          </form>
+        </section>
+      </div>
 
       <div className="space-y-4">
         <StatCard label="Customers" value={String(stats.customers)} />
@@ -1017,7 +1134,8 @@ function SettingsTab({
               Platforms commission
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Set each fee independently as a fixed peso amount or percentage.
+              Per-merchant platform fees (tax, system, other). These apply to
+              this merchant’s member payments and can be fixed ₱ or percentage.
             </p>
           </div>
 

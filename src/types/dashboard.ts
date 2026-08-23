@@ -54,11 +54,19 @@ export type SuperAdminDashboardSummary = {
   active_merchants: number
   total_billing: number
   total_billing_label: string
-  total_collections: number
-  total_collections_label: string
+  /** @deprecated Prefer merchant_platform_commission_label */
+  total_collections?: number
+  total_collections_label?: string
+  merchant_platform_commission: number
+  merchant_platform_commission_label: string
+  transactions_commission: number
+  transactions_commission_label: string
+  merchant_pending_plan_count: number
+  merchant_pending_plan_amount: number
+  merchant_pending_plan_amount_label: string
   outstanding: number
   outstanding_label: string
-  overdue_bills: number
+  overdue_bills?: number
   bills_count: number
 }
 
@@ -85,7 +93,17 @@ export type DashboardTopMerchant = {
   bar_percent: number
 }
 
+export type SuperAdminDashboardPeriod = {
+  range: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'
+  label: string
+  from: string
+  to: string
+  from_label: string
+  to_label: string
+}
+
 export type SuperAdminDashboardData = {
+  period?: SuperAdminDashboardPeriod
   summary: SuperAdminDashboardSummary
   collection_volume: DashboardVolumePoint[]
   bill_status: DashboardBillStatus[]

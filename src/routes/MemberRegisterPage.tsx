@@ -3,12 +3,12 @@ import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { CheckCircle2, LoaderCircle } from 'lucide-react'
-import { customerService } from '@/services/customerService'
+import { memberService } from '@/services/memberService'
 import type {
   MemberRegistrationFieldKey,
   PublicMemberRegistrationPayload,
   PublicMemberRegistrationResult,
-} from '@/types/customer'
+} from '@/types/member'
 
 function axiosMessage(error: unknown, fallback: string): string {
   if (!axios.isAxiosError(error)) return fallback
@@ -37,14 +37,14 @@ export default function MemberRegisterPage() {
 
   const formQuery = useQuery({
     queryKey: ['public-member-registration', merchantCode],
-    queryFn: () => customerService.getPublicRegistrationForm(merchantCode),
+    queryFn: () => memberService.getPublicRegistrationForm(merchantCode),
     enabled: Boolean(merchantCode),
     retry: false,
   })
 
   const submitMutation = useMutation({
     mutationFn: () =>
-      customerService.submitPublicRegistration(merchantCode, values, files),
+      memberService.submitPublicRegistration(merchantCode, values, files),
     onSuccess: (data) => {
       setError('')
       setResult(data)

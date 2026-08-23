@@ -1,5 +1,6 @@
-import { useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import {
   BarChart3,
   Bell,
@@ -12,9 +13,20 @@ import {
   LogOut,
   Menu,
   Settings,
+  Sparkles,
   Users,
   X,
 } from 'lucide-react'
+import {
+  MerchantAccessProvider,
+  PendingOnboardingBanner,
+  PlanExpiryReminderBanner,
+} from '@/components/admin/MerchantAccess'
+import { MerchantWriteGate } from '@/components/admin/MerchantWriteGate'
+import {
+  merchantCanAccessPath,
+  type MerchantPlanSummary,
+} from '@/lib/merchantPlan'
 import { merchantAuthService } from '@/services/merchantAuthService'
 import { cn } from '@/lib/utils'
 
@@ -26,13 +38,14 @@ export const merchantNavigation: Array<{
   icon: Icon
 }> = [
   { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-  { label: 'Member', path: '/admin/customers', icon: Users },
+  { label: 'Member', path: '/admin/member', icon: Users },
   { label: 'Generate Bills', path: '/admin/generate-bills', icon: FilePlus2 },
   { label: 'Tracker', path: '/admin/tracker', icon: LayoutGrid },
   { label: 'Payments', path: '/admin/payments', icon: CreditCard },
   { label: 'Manual Payment', path: '/admin/manual-payments', icon: HandCoins },
   { label: 'Accounting', path: '/admin/accounting', icon: BookOpen },
   { label: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
+  { label: 'Plan', path: '/admin/plan', icon: Sparkles },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
 ]
 
@@ -45,12 +58,62 @@ function initials(name?: string | null, email?: string | null) {
   return source.slice(0, 2).toUpperCase()
 }
 
+function CurrentPlanBadge({ plan }: { plan: MerchantPlanSummary | null }) {
+  if (!plan) {
+    return (
+      <Link
+        to="/admin/plan"
+        search={{ payment: undefined, status: undefined }}
+        className="flex min-w-0 items-center gap-2 rounded-xl border border-dashed border-border bg-white px-3 py-1.5 transition hover:border-primary/40 hover:bg-secondary/40"
+      >
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <Sparkles className="size-3.5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Current plan
+          </p>
+          <p className="truncate text-sm font-semibold text-foreground">
+            Not assigned
+          </p>
+        </div>
+      </Link>
+    )
+  }
+
+  return (
+    <Link
+      to="/admin/plan"
+      search={{ payment: undefined, status: undefined }}
+      className="flex min-w-0 items-center gap-2.5 rounded-xl border border-primary/20 bg-gradient-to-r from-secondary to-white px-3 py-1.5 shadow-[0_8px_20px_-16px_rgb(75_29_110_/_0.55)] transition hover:border-primary/40"
+    >
+      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+        <Sparkles className="size-3.5 text-gold" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary/70">
+          Current plan
+        </p>
+        <p className="truncate text-sm font-bold text-foreground">{plan.name}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {plan.member_range_label}
+          {plan.monthly_fee > 0 ? ` · ${plan.monthly_fee_label}/mo` : null}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
 function MerchantSidebar({
   isOpen,
   onClose,
+  merchantStatus,
+  plan,
 }: {
   isOpen: boolean
   onClose: () => void
+  merchantStatus: string | null
+  plan: MerchantPlanSummary | null
 }) {
   const navigate = useNavigate()
   const pathname = useRouterState({
@@ -58,6 +121,14 @@ function MerchantSidebar({
   })
   const user = merchantAuthService.getUser()
   const merchant = merchantAuthService.getMerchant()
+  const isPending =
+    (merchantStatus ?? merchant?.status ?? '').toLowerCase() === 'pending'
+
+  const visibleNav = useMemo(
+    () =>
+      merchantNavigation.filter((item) => merchantCanAccessPath(plan, item.path)),
+    [plan],
+  )
 
   const handleLogout = () => {
     merchantAuthService.logout()
@@ -103,7 +174,7 @@ function MerchantSidebar({
         </div>
 
         <nav className="mt-4 flex-1 space-y-1 overflow-y-auto px-3">
-          {merchantNavigation.map(({ label, path, icon: Icon }) => {
+          {visibleNav.map(({ label, path, icon: Icon }) => {
             const active =
               pathname === path || pathname.startsWith(`${path}/`)
             return (
@@ -140,6 +211,16 @@ function MerchantSidebar({
               <p className="text-xs text-muted-foreground">
                 {merchant?.code || 'Merchant'}
               </p>
+              {isPending ? (
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-sky-700">
+                  Pending
+                </p>
+              ) : null}
+              {plan ? (
+                <p className="mt-0.5 truncate text-[10px] font-medium text-primary/80">
+                  {plan.name}
+                </p>
+              ) : null}
             </div>
           </div>
           <button
@@ -166,53 +247,96 @@ export function MerchantShell({ children }: { children: ReactNode }) {
     day: 'numeric',
   }).format(new Date())
 
-  return (
-    <div className="min-h-screen bg-[#fcfaff]">
-      <MerchantSidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+  const meQuery = useQuery({
+    queryKey: ['merchant-me'],
+    queryFn: () => merchantAuthService.me(),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
+  })
 
-      <div className="lg:pl-[260px]">
-        <header className="sticky top-0 z-30 border-b border-border bg-white/90 backdrop-blur">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="rounded-lg border border-border p-2 text-primary lg:hidden"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open navigation"
-              >
-                <Menu className="size-5" />
-              </button>
-              <div>
-                <p className="text-sm text-muted-foreground">{today}</p>
-                {merchant?.code ? (
-                  <p className="font-mono text-[11px] font-semibold text-gold-foreground">
-                    {merchant.code}
-                  </p>
-                ) : null}
+  const liveMerchant = meQuery.data?.merchant ?? merchant
+  const liveStatus = liveMerchant?.status ?? null
+  const livePlan = liveMerchant?.plan ?? null
+
+  useEffect(() => {
+    if (meQuery.data?.merchant?.status === 'suspended') {
+      merchantAuthService.logout()
+      window.location.href = '/admin/login'
+    }
+  }, [meQuery.data?.merchant?.status])
+
+  return (
+    <MerchantAccessProvider status={liveStatus}>
+      <div className="min-h-screen bg-[#fcfaff]">
+        <MerchantSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          merchantStatus={liveStatus}
+          plan={livePlan}
+        />
+
+        <div className="lg:pl-[260px]">
+          <header className="sticky top-0 z-30 border-b border-border bg-white/90 backdrop-blur">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg border border-border p-2 text-primary lg:hidden"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Open navigation"
+                >
+                  <Menu className="size-5" />
+                </button>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div className="min-w-0">
+                      <CurrentPlanBadge plan={livePlan} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-sm text-muted-foreground">{today}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        {liveMerchant?.code ? (
+                          <p className="font-mono text-[11px] font-semibold text-gold-foreground">
+                            {liveMerchant.code}
+                          </p>
+                        ) : null}
+                        {(liveStatus ?? '').toLowerCase() === 'pending' ? (
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">
+                            Pending Onboarding
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="relative rounded-full border border-border p-2 text-muted-foreground transition hover:text-primary"
+                  aria-label="Notifications"
+                  data-allow-pending
+                >
+                  <Bell className="size-4" />
+                  <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                </button>
+                <span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {initials(liveMerchant?.name || user?.name, user?.email)}
+                </span>
               </div>
             </div>
+          </header>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                type="button"
-                className="relative rounded-full border border-border p-2 text-muted-foreground transition hover:text-primary"
-                aria-label="Notifications"
-              >
-                <Bell className="size-4" />
-                <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-white" />
-              </button>
-              <span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                {initials(merchant?.name || user?.name, user?.email)}
-              </span>
-            </div>
+          <div className="space-y-4 px-4 py-6 sm:px-6 lg:px-8">
+            <PendingOnboardingBanner />
+            <PlanExpiryReminderBanner plan={livePlan} />
+            <MerchantWriteGate>{children}</MerchantWriteGate>
           </div>
-        </header>
-
-        <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        </div>
       </div>
-    </div>
+    </MerchantAccessProvider>
   )
 }

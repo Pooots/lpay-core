@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import {
-  Building2,
   CreditCard,
   LoaderCircle,
   Pencil,
-  Percent,
   Plus,
   RefreshCw,
   Trash2,
@@ -15,10 +13,8 @@ import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
 import { useDialog } from '@/components/ui/AppDialog'
 import { platformSettingsService } from '@/services/platformSettingsService'
 import type {
-  CommissionType,
   CurrencyRateRow,
   GatewayRatesSettings,
-  MerchantCommissionSettings,
   MerchantPlan,
   MerchantPlanPayload,
   PaymentMethodItem,
@@ -26,14 +22,12 @@ import type {
 import { cn } from '@/lib/utils'
 
 type SettingsTab =
-  | 'merchant'
   | 'payment-methods'
   | 'rates'
   | 'plans'
   | 'currency'
 
 const TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'merchant', label: 'Merchant settings' },
   { id: 'payment-methods', label: 'Default payment methods' },
   { id: 'rates', label: 'Rates Settings' },
   { id: 'plans', label: 'Plan settings' },
@@ -111,245 +105,6 @@ function Toggle({
         )}
       />
     </button>
-  )
-}
-
-function FeeField({
-  label,
-  value,
-  type,
-  onValueChange,
-  onTypeChange,
-}: {
-  label: string
-  value: number
-  type: CommissionType
-  onValueChange: (value: number) => void
-  onTypeChange: (type: CommissionType) => void
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <label className="text-sm font-semibold text-foreground">{label}</label>
-        <select
-          value={type}
-          onChange={(e) => onTypeChange(e.target.value as CommissionType)}
-          className="rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-medium outline-none focus:border-primary"
-        >
-          <option value="percentage">Percentage</option>
-          <option value="fixed">Fixed (₱)</option>
-        </select>
-      </div>
-      <input
-        type="number"
-        min="0"
-        step="0.01"
-        value={value}
-        onChange={(e) => onValueChange(Number(e.target.value))}
-        className="mt-3 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
-    </div>
-  )
-}
-
-function summarizeFees(value: {
-  tax: number
-  tax_type: string
-  system_fee: number
-  system_fee_type: string
-  other_fee: number
-  other_fee_type: string
-}) {
-  const fmt = (amount: number, type: string) =>
-    type === 'fixed' ? `₱${amount}` : `${amount}%`
-  return `Tax ${fmt(value.tax, value.tax_type)} · System ${fmt(value.system_fee, value.system_fee_type)} · Other ${fmt(value.other_fee, value.other_fee_type)}`
-}
-
-function MerchantSettingsTab() {
-  const queryClient = useQueryClient()
-  const [form, setForm] = useState<Omit<MerchantCommissionSettings, 'updated_at'> | null>(
-    null,
-  )
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-
-  const settingsQuery = useQuery({
-    queryKey: ['super-settings-merchant-commission'],
-    queryFn: () => platformSettingsService.getMerchantCommission(),
-  })
-
-  const historyQuery = useQuery({
-    queryKey: ['super-settings-merchant-commission-history'],
-    queryFn: () => platformSettingsService.getMerchantCommissionHistory(),
-  })
-
-  useEffect(() => {
-    if (!settingsQuery.data) return
-    const { updated_at: _updatedAt, ...rest } = settingsQuery.data
-    setForm(rest)
-  }, [settingsQuery.data])
-
-  const saveMutation = useMutation({
-    mutationFn: platformSettingsService.updateMerchantCommission,
-    onSuccess: async () => {
-      setError('')
-      setSuccess('Default merchant commission saved.')
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ['super-settings-merchant-commission'],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['super-settings-merchant-commission-history'],
-        }),
-      ])
-    },
-    onError: (err) => {
-      setSuccess('')
-      setError(axiosMessage(err, 'Unable to save default commission.'))
-    },
-  })
-
-  if (settingsQuery.isLoading || !form) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-        <LoaderCircle className="size-4 animate-spin text-primary" />
-        Loading merchant settings…
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
-            <Building2 className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">
-              Platform merchant commission
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Default fees applied to newly onboarded merchants. Existing
-              merchants keep their current rates unless updated individually.
-            </p>
-            {settingsQuery.data?.updated_at ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Last updated: {formatUpdatedAt(settingsQuery.data.updated_at)}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <FeeField
-            label="Tax"
-            value={form.tax}
-            type={form.tax_type}
-            onValueChange={(tax) => setForm((prev) => (prev ? { ...prev, tax } : prev))}
-            onTypeChange={(tax_type) =>
-              setForm((prev) => (prev ? { ...prev, tax_type } : prev))
-            }
-          />
-          <FeeField
-            label="System fee"
-            value={form.system_fee}
-            type={form.system_fee_type}
-            onValueChange={(system_fee) =>
-              setForm((prev) => (prev ? { ...prev, system_fee } : prev))
-            }
-            onTypeChange={(system_fee_type) =>
-              setForm((prev) => (prev ? { ...prev, system_fee_type } : prev))
-            }
-          />
-          <FeeField
-            label="Other fee"
-            value={form.other_fee}
-            type={form.other_fee_type}
-            onValueChange={(other_fee) =>
-              setForm((prev) => (prev ? { ...prev, other_fee } : prev))
-            }
-            onTypeChange={(other_fee_type) =>
-              setForm((prev) => (prev ? { ...prev, other_fee_type } : prev))
-            }
-          />
-        </div>
-
-        {error ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {error}
-          </div>
-        ) : null}
-        {success ? (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            {success}
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          disabled={saveMutation.isPending}
-          onClick={() => {
-            setSuccess('')
-            saveMutation.mutate(form)
-          }}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-[#3f1860] disabled:opacity-70"
-        >
-          {saveMutation.isPending ? (
-            <LoaderCircle className="size-4 animate-spin" />
-          ) : null}
-          Save default commission
-        </button>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
-        <h3 className="text-sm font-bold text-foreground">
-          History of default platform commission rate changes.
-        </h3>
-        <div className="mt-4 overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2.5">Previous</th>
-                <th className="px-3 py-2.5">Current</th>
-                <th className="px-3 py-2.5">Changed by</th>
-                <th className="px-3 py-2.5">Changed at</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(historyQuery.data ?? []).length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-3 py-8 text-center text-sm text-muted-foreground"
-                  >
-                    No default commission changes recorded yet.
-                  </td>
-                </tr>
-              ) : (
-                historyQuery.data?.map((row) => (
-                  <tr
-                    key={row.uuid}
-                    className="border-b border-border/70 last:border-0"
-                  >
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {summarizeFees(row.previous_value)}
-                    </td>
-                    <td className="px-3 py-3 font-medium text-foreground">
-                      {summarizeFees(row.current_value)}
-                    </td>
-                    <td className="px-3 py-3 text-foreground">{row.changed_by}</td>
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {row.changed_at_label || '—'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
   )
 }
 
@@ -1424,12 +1179,10 @@ function PlanSettingsTab() {
 }
 
 export default function SuperAdminSettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>('merchant')
+  const [tab, setTab] = useState<SettingsTab>('payment-methods')
 
   const content = useMemo(() => {
     switch (tab) {
-      case 'merchant':
-        return <MerchantSettingsTab />
       case 'payment-methods':
         return <PaymentMethodsTab />
       case 'rates':

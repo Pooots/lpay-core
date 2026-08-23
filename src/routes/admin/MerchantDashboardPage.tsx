@@ -14,95 +14,14 @@ import {
   Wallet,
 } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
+import { PremiumCollectionVolumeChart } from '@/components/admin/PremiumCollectionVolumeChart'
 import { merchantAuthService } from '@/services/merchantAuthService'
 import { merchantDashboardService } from '@/services/merchantDashboardService'
 import type {
   DashboardBillStatus,
   DashboardRecentBill,
-  DashboardVolumePoint,
 } from '@/types/dashboard'
 import { cn } from '@/lib/utils'
-
-function CollectionVolumeChart({
-  points,
-}: {
-  points: DashboardVolumePoint[]
-}) {
-  const width = 560
-  const height = 220
-  const padX = 16
-  const padY = 20
-  const data = points.length > 0 ? points : [{ key: 'empty', label: '—', value: 0 }]
-  const max = Math.max(...data.map((p) => p.value), 1)
-  const step = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0
-
-  const coords = data.map((point, index) => {
-    const x = padX + index * step
-    const y = height - padY - (point.value / max) * (height - padY * 2)
-    return { x, y, ...point }
-  })
-
-  const line = coords
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-    .join(' ')
-  const area = `${line} L ${coords.at(-1)!.x.toFixed(1)} ${height - padY} L ${coords[0]!.x.toFixed(1)} ${height - padY} Z`
-
-  return (
-    <div className="w-full overflow-hidden">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-56 w-full"
-        role="img"
-        aria-label="Collection volume chart"
-      >
-        <defs>
-          <linearGradient id="merchantCollectionFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4B1D6E" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#4B1D6E" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((t) => (
-          <line
-            key={t}
-            x1={padX}
-            x2={width - padX}
-            y1={padY + t * (height - padY * 2)}
-            y2={padY + t * (height - padY * 2)}
-            stroke="#e8dff2"
-            strokeDasharray="4 6"
-          />
-        ))}
-        <path d={area} fill="url(#merchantCollectionFill)" />
-        <path
-          d={line}
-          fill="none"
-          stroke="#4B1D6E"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {coords.map((p) => (
-          <circle
-            key={p.key}
-            cx={p.x}
-            cy={p.y}
-            r="3.5"
-            fill="#C9A227"
-            stroke="#fff"
-            strokeWidth="2"
-          />
-        ))}
-      </svg>
-      <div className="mt-1 flex justify-between px-1 text-[11px] text-muted-foreground">
-        {data
-          .filter((_, i) => i % 2 === 0 || i === data.length - 1)
-          .map((p) => (
-            <span key={p.key}>{p.label}</span>
-          ))}
-      </div>
-    </div>
-  )
-}
 
 function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
   const total = slices.reduce((sum, item) => sum + item.count, 0) || 1
@@ -113,8 +32,13 @@ function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
   const hasData = slices.some((s) => s.count > 0)
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
-      <svg width="160" height="160" viewBox="0 0 160 160" className="shrink-0">
+    <div className="flex w-full min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <svg
+        width="160"
+        height="160"
+        viewBox="0 0 160 160"
+        className="mx-auto shrink-0 sm:mx-0"
+      >
         <circle
           cx="80"
           cy="80"
@@ -163,15 +87,24 @@ function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
         </text>
       </svg>
 
-      <ul className="w-full space-y-3 sm:w-auto">
+      <ul className="min-w-0 flex-1 space-y-2.5">
         {slices.map((slice) => (
-          <li key={slice.key} className="flex items-center gap-3 text-sm">
-            <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: slice.color }}
-            />
-            <span className="min-w-28 text-muted-foreground">{slice.label}</span>
-            <span className="font-semibold text-foreground">{slice.percent}%</span>
+          <li
+            key={slice.key}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-[#fcfaff] px-3 py-2.5 text-sm"
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: slice.color }}
+              />
+              <span className="truncate text-muted-foreground">
+                {slice.label}
+              </span>
+            </span>
+            <span className="shrink-0 font-semibold text-foreground">
+              {slice.percent}%
+            </span>
           </li>
         ))}
       </ul>
@@ -194,6 +127,18 @@ function statusBadgeClass(status: string) {
 
 export default function MerchantDashboardPage() {
   const merchant = merchantAuthService.getMerchant()
+  const isPendingOnboarding =
+    (merchant?.status ?? '').toLowerCase() === 'pending'
+
+  const meQuery = useQuery({
+    queryKey: ['merchant-me'],
+    queryFn: () => merchantAuthService.me(),
+    staleTime: 60 * 1000,
+  })
+  const pendingFromMe =
+    (meQuery.data?.merchant?.status ?? merchant?.status ?? '').toLowerCase() ===
+    'pending'
+  const showPending = pendingFromMe || isPendingOnboarding
 
   const dashboardQuery = useQuery({
     queryKey: ['merchant-dashboard'],
@@ -253,6 +198,44 @@ export default function MerchantDashboardPage() {
             {merchant?.name ? ` for ${merchant.name}` : ''}.
           </p>
         </div>
+
+        {showPending ? (
+          <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-6 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-sky-100 text-sky-700">
+                <Clock3 className="size-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
+                  Account status
+                </p>
+                <h2 className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+                  Pending Onboarding
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
+                  Activate your account in two ways: pay for a plan under Plan,
+                  or wait for a super admin to activate you. You can explore
+                  modules, but transactions stay locked until activation.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    to="/admin/plan"
+                    search={{ payment: undefined, status: undefined }}
+                    className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                  >
+                    Pay plan to activate
+                  </Link>
+                  <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
+                    Browse modules
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
+                    Transactions locked
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {dashboardQuery.isLoading ? (
           <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-white py-20 text-sm text-muted-foreground">
@@ -377,7 +360,7 @@ export default function MerchantDashboardPage() {
                     Last 30 days
                   </span>
                 </div>
-                <CollectionVolumeChart points={collectionVolume} />
+                <PremiumCollectionVolumeChart points={collectionVolume} />
               </section>
 
               <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">

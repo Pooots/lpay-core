@@ -60,6 +60,24 @@ function isAuthFormRequest(config: { url?: string }): boolean {
   return url.includes('/login')
 }
 
+/** Pending merchants may still pay / complete plan checkout to self-activate. */
+function isPendingPlanPaymentRequest(config: {
+  url?: string
+  method?: string
+}): boolean {
+  const method = (config.method ?? 'get').toLowerCase()
+  if (['get', 'head', 'options'].includes(method)) return true
+
+  const url = (config.url ?? '').replace(/^\//, '')
+  return (
+    url === 'admin/plans/checkout' ||
+    url.startsWith('admin/plans/checkout?') ||
+    url === 'admin/plans/renew' ||
+    url.startsWith('admin/plans/renew?') ||
+    url.includes('admin/plans/payments/')
+  )
+}
+
 adminApi.interceptors.request.use(
   (config) => {
     if (isAuthFormRequest(config)) {
@@ -112,6 +130,35 @@ merchantApi.interceptors.request.use(
     const merchantToken = localStorage.getItem('merchant_token')
     if (merchantToken) {
       config.headers.Authorization = `Bearer ${merchantToken}`
+    }
+
+    const method = (config.method ?? 'get').toLowerCase()
+    if (!['get', 'head', 'options'].includes(method)) {
+      if (isPendingPlanPaymentRequest(config)) {
+        return config
+      }
+
+      try {
+        const raw = localStorage.getItem('merchant_profile')
+        const merchant = raw && raw !== 'null' ? JSON.parse(raw) : null
+        if (merchant?.status === 'pending') {
+          return Promise.reject({
+            isAxiosError: true,
+            response: {
+              status: 403,
+              data: {
+                message:
+                  'Merchant onboarding is pending. Pay for a plan under Plan to activate, or wait for a super admin to activate your account.',
+                error: 'pending_onboarding',
+              },
+            },
+            message: 'Pending onboarding',
+            config,
+          })
+        }
+      } catch {
+        // ignore parse errors
+      }
     }
 
     return config

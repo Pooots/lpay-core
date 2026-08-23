@@ -21,10 +21,10 @@ import {
 import { useDialog } from '@/components/ui/AppDialog'
 import { TablePagination } from '@/components/ui/TablePagination'
 import { billService } from '@/services/billService'
-import { customerService } from '@/services/customerService'
+import { memberService } from '@/services/memberService'
 import { settingsService } from '@/services/settingsService'
 import type { Bill, BillPayload, BillStatus, GenerateBillsPayload } from '@/types/bill'
-import type { Customer } from '@/types/customer'
+import type { Member } from '@/types/member'
 import { emptyPaginationMeta } from '@/types/pagination'
 import type { BillsSetItem, BillsSetPreview } from '@/types/settings'
 import { cn } from '@/lib/utils'
@@ -206,7 +206,7 @@ function BillFormModal({
 }) {
   const customersQuery = useQuery({
     queryKey: ['merchant-customers-options'],
-    queryFn: () => customerService.listAll(),
+    queryFn: () => memberService.listAll(),
     enabled: open && (mode === 'create' || mode === 'single'),
   })
 
@@ -650,7 +650,7 @@ function BillFormModal({
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredCustomers.map((customer: Customer) => {
+                            {filteredCustomers.map((customer: Member) => {
                               const checked = selectedCustomerIds.includes(
                                 customer.uuid,
                               )

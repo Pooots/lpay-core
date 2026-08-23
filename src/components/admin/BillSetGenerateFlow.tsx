@@ -3,10 +3,10 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { LoaderCircle, Plus, X } from 'lucide-react'
 import { billService } from '@/services/billService'
-import { customerService } from '@/services/customerService'
+import { memberService } from '@/services/memberService'
 import { settingsService } from '@/services/settingsService'
 import type { BillsSetItem } from '@/types/settings'
-import type { Customer } from '@/types/customer'
+import type { Member } from '@/types/member'
 import { cn } from '@/lib/utils'
 
 function axiosMessage(err: unknown, fallback: string) {
@@ -556,7 +556,7 @@ export function VariableBillSetModal({
 }) {
   const customersQuery = useQuery({
     queryKey: ['merchant-customers-options'],
-    queryFn: () => customerService.listAll(),
+    queryFn: () => memberService.listAll(),
     enabled: open && Boolean(billSet),
   })
 
@@ -738,7 +738,7 @@ export function VariableBillSetModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {customers.map((customer: Customer) => {
+                    {customers.map((customer: Member) => {
                       const value = amounts[customer.uuid] ?? ''
                       const valid =
                         value !== '' &&

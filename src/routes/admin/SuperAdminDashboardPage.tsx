@@ -1,104 +1,48 @@
 import { Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   ArrowRight,
   Building2,
-  Clock3,
   CreditCard,
-  FileText,
   LoaderCircle,
+  Sparkles,
+  Wallet,
 } from 'lucide-react'
 import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
-import { superAdminDashboardService } from '@/services/superAdminDashboardService'
+import { PremiumCollectionVolumeChart } from '@/components/admin/PremiumCollectionVolumeChart'
+import {
+  superAdminDashboardService,
+  type DashboardRange,
+} from '@/services/superAdminDashboardService'
 import type {
   DashboardBillStatus,
   DashboardRecentBill,
   DashboardTopMerchant,
-  DashboardVolumePoint,
 } from '@/types/dashboard'
 import { cn } from '@/lib/utils'
 
-function CollectionVolumeChart({
-  points,
-}: {
-  points: DashboardVolumePoint[]
-}) {
-  const width = 560
-  const height = 220
-  const padX = 16
-  const padY = 20
-  const data = points.length > 0 ? points : [{ key: 'empty', label: '—', value: 0 }]
-  const max = Math.max(...data.map((p) => p.value), 1)
-  const step = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0
+const RANGE_OPTIONS: Array<{ id: DashboardRange; label: string }> = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+  { id: 'yearly', label: 'Yearly' },
+  { id: 'custom', label: 'Custom' },
+]
 
-  const coords = data.map((point, index) => {
-    const x = padX + index * step
-    const y = height - padY - (point.value / max) * (height - padY * 2)
-    return { x, y, ...point }
-  })
+function todayIso() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
-  const line = coords
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-    .join(' ')
-  const area = `${line} L ${coords.at(-1)!.x.toFixed(1)} ${height - padY} L ${coords[0]!.x.toFixed(1)} ${height - padY} Z`
-
-  return (
-    <div className="w-full overflow-hidden">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-56 w-full"
-        role="img"
-        aria-label="Collection volume chart"
-      >
-        <defs>
-          <linearGradient id="collectionFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4B1D6E" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#4B1D6E" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((t) => (
-          <line
-            key={t}
-            x1={padX}
-            x2={width - padX}
-            y1={padY + t * (height - padY * 2)}
-            y2={padY + t * (height - padY * 2)}
-            stroke="#e8dff2"
-            strokeDasharray="4 6"
-          />
-        ))}
-        <path d={area} fill="url(#collectionFill)" />
-        <path
-          d={line}
-          fill="none"
-          stroke="#4B1D6E"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {coords.map((p) => (
-          <circle
-            key={p.key}
-            cx={p.x}
-            cy={p.y}
-            r="3.5"
-            fill="#C9A227"
-            stroke="#fff"
-            strokeWidth="2"
-          />
-        ))}
-      </svg>
-      <div className="mt-1 flex justify-between px-1 text-[11px] text-muted-foreground">
-        {data
-          .filter((_, i) => i % 2 === 0 || i === data.length - 1)
-          .map((p) => (
-            <span key={p.key}>{p.label}</span>
-          ))}
-      </div>
-    </div>
-  )
+function monthStartIso() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}-01`
 }
 
 function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
@@ -110,8 +54,13 @@ function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
   const hasData = slices.some((s) => s.count > 0)
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
-      <svg width="160" height="160" viewBox="0 0 160 160" className="shrink-0">
+    <div className="flex w-full min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <svg
+        width="160"
+        height="160"
+        viewBox="0 0 160 160"
+        className="mx-auto shrink-0 sm:mx-0"
+      >
         <circle
           cx="80"
           cy="80"
@@ -160,15 +109,24 @@ function BillStatusDonut({ slices }: { slices: DashboardBillStatus[] }) {
         </text>
       </svg>
 
-      <ul className="w-full space-y-3 sm:w-auto">
+      <ul className="min-w-0 flex-1 space-y-2.5">
         {slices.map((slice) => (
-          <li key={slice.key} className="flex items-center gap-3 text-sm">
-            <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: slice.color }}
-            />
-            <span className="min-w-28 text-muted-foreground">{slice.label}</span>
-            <span className="font-semibold text-foreground">{slice.percent}%</span>
+          <li
+            key={slice.key}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-[#fcfaff] px-3 py-2.5 text-sm"
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: slice.color }}
+              />
+              <span className="truncate text-muted-foreground">
+                {slice.label}
+              </span>
+            </span>
+            <span className="shrink-0 font-semibold text-foreground">
+              {slice.percent}%
+            </span>
           </li>
         ))}
       </ul>
@@ -190,12 +148,32 @@ function statusBadgeClass(status: string) {
 }
 
 export default function SuperAdminDashboardPage() {
+  const [range, setRange] = useState<DashboardRange>('monthly')
+  const [customFrom, setCustomFrom] = useState(monthStartIso)
+  const [customTo, setCustomTo] = useState(todayIso)
+
+  const periodParams = useMemo(
+    () => ({
+      range,
+      from: range === 'custom' ? customFrom : undefined,
+      to: range === 'custom' ? customTo : undefined,
+    }),
+    [range, customFrom, customTo],
+  )
+
   const dashboardQuery = useQuery({
-    queryKey: ['super-admin-dashboard'],
-    queryFn: () => superAdminDashboardService.get(),
+    queryKey: ['super-admin-dashboard', periodParams],
+    queryFn: () => superAdminDashboardService.get(periodParams),
+    placeholderData: keepPreviousData,
+    enabled:
+      range !== 'custom' ||
+      (Boolean(customFrom) &&
+        Boolean(customTo) &&
+        customFrom <= customTo),
   })
 
   const summary = dashboardQuery.data?.summary
+  const period = dashboardQuery.data?.period
   const collectionVolume = useMemo(
     () => dashboardQuery.data?.collection_volume ?? [],
     [dashboardQuery.data],
@@ -217,39 +195,103 @@ export default function SuperAdminDashboardPage() {
     {
       label: 'Total Merchants',
       value: String(summary?.merchants ?? 0),
+      hint: null as string | null,
       icon: Building2,
       iconClass: 'bg-primary text-primary-foreground',
     },
     {
-      label: 'Total Billing',
-      value: summary?.total_billing_label ?? '₱0.00',
-      icon: FileText,
-      iconClass: 'bg-[#efe6f8] text-primary',
-    },
-    {
-      label: 'Total Collections',
-      value: summary?.total_collections_label ?? '₱0.00',
-      icon: CreditCard,
+      label: 'Merchant Platform Commission',
+      value:
+        summary?.merchant_platform_commission_label ??
+        summary?.total_collections_label ??
+        '₱0.00',
+      hint: 'Plan payments in selected period',
+      icon: Sparkles,
       iconClass: 'bg-[#f7efd4] text-gold-foreground',
     },
     {
-      label: 'Outstanding',
-      value: summary?.outstanding_label ?? '₱0.00',
-      icon: Clock3,
-      iconClass: 'bg-[#f8e9c8] text-[#8a6a12]',
+      label: 'Transactions Commission',
+      value: summary?.transactions_commission_label ?? '₱0.00',
+      hint: 'Member payment fees in selected period',
+      icon: Wallet,
+      iconClass: 'bg-[#efe6f8] text-primary',
+    },
+    {
+      label: 'Merchant Pending Plan Payment',
+      value: summary?.merchant_pending_plan_amount_label ?? '₱0.00',
+      hint: `${summary?.merchant_pending_plan_count ?? 0} merchant${
+        (summary?.merchant_pending_plan_count ?? 0) === 1 ? '' : 's'
+      } unpaid next month`,
+      icon: CreditCard,
+      iconClass: 'bg-[#fce8ef] text-[#b4234a]',
     },
   ] as const
 
   return (
     <SuperAdminShell>
       <div className="home-rise space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Admin Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-            Platform-wide overview of merchants, billing and collections.
-          </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Admin Dashboard
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+              Platform-wide overview of merchants, billing and commissions.
+            </p>
+            {period?.label ? (
+              <p className="mt-2 text-sm font-medium text-primary">
+                Showing: {period.label}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-white p-1">
+              {RANGE_OPTIONS.map((option) => {
+                const active = range === option.id
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setRange(option.id)}
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:text-sm',
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {range === 'custom' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  From
+                  <input
+                    type="date"
+                    value={customFrom}
+                    max={customTo || undefined}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="mt-1 block rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="text-xs font-medium text-muted-foreground">
+                  To
+                  <input
+                    type="date"
+                    value={customTo}
+                    min={customFrom || undefined}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="mt-1 block rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  />
+                </label>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {dashboardQuery.isLoading ? (
@@ -264,7 +306,7 @@ export default function SuperAdminDashboardPage() {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {metrics.map(({ label, value, icon: Icon, iconClass }) => (
+              {metrics.map(({ label, value, hint, icon: Icon, iconClass }) => (
                 <div
                   key={label}
                   className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)]"
@@ -275,6 +317,11 @@ export default function SuperAdminDashboardPage() {
                       <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
                         {value}
                       </p>
+                      {hint ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {hint}
+                        </p>
+                      ) : null}
                     </div>
                     <span
                       className={cn(
@@ -289,25 +336,6 @@ export default function SuperAdminDashboardPage() {
               ))}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:col-span-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Overdue Bills</p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-                      {summary?.overdue_bills ?? 0}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {summary?.active_merchants ?? 0} active merchants
-                    </p>
-                  </div>
-                  <span className="grid size-10 place-items-center rounded-xl bg-[#fce8ef] text-[#b4234a]">
-                    <AlertTriangle className="size-5" />
-                  </span>
-                </div>
-              </div>
-            </div>
-
             <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
               <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -315,10 +343,10 @@ export default function SuperAdminDashboardPage() {
                     Collection Volume
                   </h2>
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-primary">
-                    Last 30 days
+                    {period?.label ?? 'Selected period'}
                   </span>
                 </div>
-                <CollectionVolumeChart points={collectionVolume} />
+                <PremiumCollectionVolumeChart points={collectionVolume} />
               </section>
 
               <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">

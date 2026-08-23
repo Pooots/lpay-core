@@ -4,9 +4,9 @@ import axios from 'axios'
 import { Banknote, Check, LoaderCircle, Search } from 'lucide-react'
 import { MerchantShell } from '@/components/admin/MerchantShell'
 import { TablePagination } from '@/components/ui/TablePagination'
-import { customerService } from '@/services/customerService'
+import { memberService } from '@/services/memberService'
 import { paymentService } from '@/services/paymentService'
-import type { Customer, CustomerBillRow } from '@/types/customer'
+import type { Member, MemberBillRow } from '@/types/member'
 import { emptyPaginationMeta } from '@/types/pagination'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +29,7 @@ export default function ManualPaymentPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [memberPage, setMemberPage] = useState(1)
   const [recentPage, setRecentPage] = useState(1)
-  const [selectedMember, setSelectedMember] = useState<Customer | null>(null)
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [billUuid, setBillUuid] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
@@ -47,7 +47,7 @@ export default function ManualPaymentPage() {
   const membersQuery = useQuery({
     queryKey: ['merchant-customers', debouncedSearch, memberPage],
     queryFn: () =>
-      customerService.list({
+      memberService.list({
         q: debouncedSearch || undefined,
         page: memberPage,
         per_page: 10,
@@ -56,7 +56,7 @@ export default function ManualPaymentPage() {
 
   const detailQuery = useQuery({
     queryKey: ['merchant-customer', selectedMember?.uuid],
-    queryFn: () => customerService.get(selectedMember!.uuid),
+    queryFn: () => memberService.get(selectedMember!.uuid),
     enabled: Boolean(selectedMember?.uuid),
   })
 
@@ -115,7 +115,7 @@ export default function ManualPaymentPage() {
         }),
       ])
       if (selectedMember) {
-        const refreshed = await customerService.get(selectedMember.uuid)
+        const refreshed = await memberService.get(selectedMember.uuid)
         const nextPayable = (refreshed.bills ?? []).filter(
           (bill) =>
             bill.balance > 0 &&
@@ -135,7 +135,7 @@ export default function ManualPaymentPage() {
     },
   })
 
-  const handleSelectMember = (member: Customer) => {
+  const handleSelectMember = (member: Member) => {
     setSelectedMember(member)
     setBillUuid('')
     setAmount('')
@@ -292,7 +292,7 @@ export default function ManualPaymentPage() {
                       className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     >
                       <option value="">Select a bill</option>
-                      {payableBills.map((bill: CustomerBillRow) => (
+                      {payableBills.map((bill: MemberBillRow) => (
                         <option key={bill.uuid} value={bill.uuid}>
                           {bill.bill_number} · {bill.title} · balance{' '}
                           {bill.balance_label}
