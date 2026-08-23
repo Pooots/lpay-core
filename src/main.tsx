@@ -42,6 +42,8 @@ import { adminAuthService } from '@/services/adminAuthService'
 import { merchantAuthService } from '@/services/merchantAuthService'
 import reportWebVitals from './reportWebVitals'
 
+document.title = 'iLPay - i Will Pay'
+
 const requireSuperAdmin = () => {
   if (!adminAuthService.isAuthenticated()) {
     throw redirect({ to: '/admin/super/login' })
