@@ -1,7 +1,35 @@
 import axios from 'axios'
 
-// Relative by default so the browser hits the current domain's /api.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+/**
+ * Resolve API base URL for local (relative / Vite proxy) and Vercel → Hostinger.
+ * If Vercel env is only the Hostinger origin (no /api/v1), append it automatically.
+ */
+function resolveApiBaseUrl(raw: string | undefined): string {
+  const value = (raw || '/api/v1').trim().replace(/\/+$/, '')
+
+  if (!value.startsWith('http://') && !value.startsWith('https://')) {
+    return value.startsWith('/') ? value : `/${value}`
+  }
+
+  try {
+    const url = new URL(value)
+    const path = url.pathname.replace(/\/+$/, '') || '/'
+
+    if (path === '/' || path === '/api' || !path.includes('/api/v1')) {
+      url.pathname = '/api/v1'
+    }
+
+    url.search = ''
+    url.hash = ''
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return '/api/v1'
+  }
+}
+
+const API_BASE_URL = resolveApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL as string | undefined,
+)
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
