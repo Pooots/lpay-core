@@ -861,7 +861,7 @@ function SettingsTab({
   onSaved: () => Promise<void>
 }) {
   const [settingsTab, setSettingsTab] = useState<
-    'profile' | 'accounting' | 'banks' | 'commission'
+    'profile' | 'accounting' | 'banks'
   >('profile')
   const [name, setName] = useState(merchant.name)
   const [email, setEmail] = useState(merchant.email)
@@ -872,22 +872,6 @@ function SettingsTab({
   const [frequency, setFrequency] = useState<SettlementFrequency>(
     merchant.settlement_frequency ?? 'bi_monthly',
   )
-  const [commissionTax, setCommissionTax] = useState(
-    String(merchant.commission_tax ?? 0),
-  )
-  const [commissionTaxType, setCommissionTaxType] = useState<CommissionType>(
-    merchant.commission_tax_type ?? 'percentage',
-  )
-  const [commissionSystemFee, setCommissionSystemFee] = useState(
-    String(merchant.commission_system_fee ?? 0),
-  )
-  const [commissionSystemFeeType, setCommissionSystemFeeType] =
-    useState<CommissionType>(merchant.commission_system_fee_type ?? 'fixed')
-  const [commissionOtherFee, setCommissionOtherFee] = useState(
-    String(merchant.commission_other_fee ?? 0),
-  )
-  const [commissionOtherFeeType, setCommissionOtherFeeType] =
-    useState<CommissionType>(merchant.commission_other_fee_type ?? 'fixed')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -898,12 +882,6 @@ function SettingsTab({
     setAddress(merchant.address ?? '')
     setStatus(merchant.status)
     setFrequency(merchant.settlement_frequency ?? 'bi_monthly')
-    setCommissionTax(String(merchant.commission_tax ?? 0))
-    setCommissionTaxType(merchant.commission_tax_type ?? 'percentage')
-    setCommissionSystemFee(String(merchant.commission_system_fee ?? 0))
-    setCommissionSystemFeeType(merchant.commission_system_fee_type ?? 'fixed')
-    setCommissionOtherFee(String(merchant.commission_other_fee ?? 0))
-    setCommissionOtherFeeType(merchant.commission_other_fee_type ?? 'fixed')
     setPassword('')
   }, [merchant])
 
@@ -958,35 +936,6 @@ function SettingsTab({
             : undefined)
         : null
       setError(message ?? 'Unable to save accounting settings.')
-    },
-  })
-
-  const commissionMutation = useMutation({
-    mutationFn: () =>
-      merchantService.update(merchant.uuid, {
-        commission_tax: Number(commissionTax) || 0,
-        commission_tax_type: commissionTaxType,
-        commission_system_fee: Number(commissionSystemFee) || 0,
-        commission_system_fee_type: commissionSystemFeeType,
-        commission_other_fee: Number(commissionOtherFee) || 0,
-        commission_other_fee_type: commissionOtherFeeType,
-      }),
-    onSuccess: async () => {
-      setError('')
-      setSuccess('Platform commission saved.')
-      await onSaved()
-    },
-    onError: (err) => {
-      setSuccess('')
-      const message = axios.isAxiosError(err)
-        ? (err.response?.data?.message as string | undefined) ||
-          (err.response?.data?.errors
-            ? Object.values(err.response.data.errors as Record<string, string[]>)
-                .flat()
-                .join(' ')
-            : undefined)
-        : null
-      setError(message ?? 'Unable to save platform commission.')
     },
   })
 
@@ -1052,21 +1001,20 @@ function SettingsTab({
   ]
 
   const settingsTabs: Array<{
-    id: 'profile' | 'accounting' | 'banks' | 'commission'
+    id: 'profile' | 'accounting' | 'banks'
     label: string
   }> = [
     { id: 'profile', label: 'Profile' },
     { id: 'accounting', label: 'Accounting Settings' },
     { id: 'banks', label: 'Bank Details' },
-    { id: 'commission', label: 'Platforms Commission' },
   ]
 
   return (
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_10px_30px_-24px_rgb(75_29_110_/_0.35)] sm:p-6">
       <h2 className="text-lg font-bold text-foreground">Settings</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Manage merchant profile, settlement frequency, bank accounts, and
-        platform commission
+        Manage merchant profile, settlement frequency, and bank accounts.
+        Platform fees are configured on the merchant’s plan.
       </p>
 
       <div className="mt-5 flex flex-wrap gap-2 rounded-xl border border-border bg-[#fcfaff] p-1">
@@ -1280,79 +1228,6 @@ function SettingsTab({
           />
         </div>
       ) : null}
-
-      {settingsTab === 'commission' ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            setSuccess('')
-            commissionMutation.mutate()
-          }}
-          className="mt-5 max-w-xl space-y-5"
-        >
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              Platforms commission
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Per-merchant platform fees (tax, system, other). These apply to
-              this merchant’s member payments and can be fixed ₱ or percentage.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <FeeRow
-              label="Tax"
-              value={commissionTax}
-              type={commissionTaxType}
-              onValueChange={setCommissionTax}
-              onTypeChange={setCommissionTaxType}
-            />
-            <FeeRow
-              label="System fee"
-              value={commissionSystemFee}
-              type={commissionSystemFeeType}
-              onValueChange={setCommissionSystemFee}
-              onTypeChange={setCommissionSystemFeeType}
-            />
-            <FeeRow
-              label="Other fee"
-              value={commissionOtherFee}
-              type={commissionOtherFeeType}
-              onValueChange={setCommissionOtherFee}
-              onTypeChange={setCommissionOtherFeeType}
-            />
-          </div>
-
-          <div className="rounded-xl border border-primary/15 bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
-            Example on a ₱1,000 payment:{' '}
-            <span className="font-semibold text-primary">
-              ₱
-              {feeExampleTotal(
-                Number(commissionTax) || 0,
-                commissionTaxType,
-                Number(commissionSystemFee) || 0,
-                commissionSystemFeeType,
-                Number(commissionOtherFee) || 0,
-                commissionOtherFeeType,
-                1000,
-              ).toFixed(2)}
-            </span>{' '}
-            total platform fees
-          </div>
-
-          <button
-            type="submit"
-            disabled={commissionMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-[#3f1860] disabled:opacity-60"
-          >
-            {commissionMutation.isPending ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : null}
-            Save platform commission
-          </button>
-        </form>
-      ) : null}
     </section>
   )
 }
@@ -1488,6 +1363,33 @@ function MerchantPlanTab({
                 <span className="font-semibold text-foreground">Fee:</span>{' '}
                 {selectedPlan.monthly_fee_label}
               </p>
+              <div className="mt-2 space-y-1 text-xs">
+                <p>
+                  <span className="font-semibold text-foreground">Tax:</span>{' '}
+                  {formatSelectedPlanFee(
+                    selectedPlan.commission_tax,
+                    selectedPlan.commission_tax_type,
+                  )}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">
+                    System fee:
+                  </span>{' '}
+                  {formatSelectedPlanFee(
+                    selectedPlan.commission_system_fee,
+                    selectedPlan.commission_system_fee_type,
+                  )}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">
+                    Other fee:
+                  </span>{' '}
+                  {formatSelectedPlanFee(
+                    selectedPlan.commission_other_fee,
+                    selectedPlan.commission_other_fee_type,
+                  )}
+                </p>
+              </div>
             </div>
           ) : null}
 
@@ -1507,80 +1409,12 @@ function MerchantPlanTab({
   )
 }
 
-function feeExampleTotal(
-  tax: number,
-  taxType: CommissionType,
-  systemFee: number,
-  systemType: CommissionType,
-  otherFee: number,
-  otherType: CommissionType,
-  baseAmount: number,
+function formatSelectedPlanFee(
+  value: number | undefined,
+  type: CommissionType | undefined,
 ) {
-  const calc = (value: number, type: CommissionType) =>
-    type === 'percentage' ? (baseAmount * value) / 100 : value
-
-  return calc(tax, taxType) + calc(systemFee, systemType) + calc(otherFee, otherType)
-}
-
-function FeeRow({
-  label,
-  value,
-  type,
-  onValueChange,
-  onTypeChange,
-}: {
-  label: string
-  value: string
-  type: CommissionType
-  onValueChange: (value: string) => void
-  onTypeChange: (type: CommissionType) => void
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-[#fcfaff] p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-semibold text-foreground">{label}</p>
-        <div className="inline-flex rounded-xl border border-border bg-white p-1">
-          <button
-            type="button"
-            onClick={() => onTypeChange('fixed')}
-            className={cn(
-              'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-              type === 'fixed'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-primary',
-            )}
-          >
-            Fixed ₱
-          </button>
-          <button
-            type="button"
-            onClick={() => onTypeChange('percentage')}
-            className={cn(
-              'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-              type === 'percentage'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-primary',
-            )}
-          >
-            Percentage %
-          </button>
-        </div>
-      </div>
-      <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {type === 'fixed' ? `${label} amount (₱)` : `${label} rate (%)`}
-      </label>
-      <input
-        required
-        type="number"
-        min={0}
-        max={type === 'percentage' ? 100 : undefined}
-        step="0.01"
-        value={value}
-        onChange={(e) => onValueChange(e.target.value)}
-        className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
-    </div>
-  )
+  const amount = Number(value) || 0
+  return type === 'fixed' ? `₱${amount.toFixed(2)}` : `${amount}%`
 }
 
 function Field({

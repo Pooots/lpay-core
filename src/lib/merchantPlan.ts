@@ -29,6 +29,16 @@ export type MerchantPlanSummary = {
   member_range_label: string
   monthly_fee: number
   monthly_fee_label: string
+  platform_fees?: {
+    tax: number
+    tax_type: string
+    system_fee: number
+    system_fee_type: string
+    other_fee: number
+    other_fee_type: string
+  }
+  total_due?: number
+  total_due_label?: string
   features: string[]
   features_enforced: boolean
   paid_through?: string | null

@@ -13,12 +13,15 @@ import {
 import { MerchantShell } from '@/components/admin/MerchantShell'
 import { useDialog } from '@/components/ui/AppDialog'
 import { PLAN_FEATURE_LABELS } from '@/lib/merchantPlan'
+import type { MerchantPlanSummary } from '@/lib/merchantPlan'
 import { merchantAuthService } from '@/services/merchantAuthService'
 import {
   merchantPlanService,
   type MerchantPlanCatalogItem,
 } from '@/services/merchantPlanService'
 import { cn } from '@/lib/utils'
+
+type PlanPlatformFees = NonNullable<MerchantPlanCatalogItem['platform_fees']>
 
 function statusClass(status: string) {
   switch (status) {
@@ -32,6 +35,54 @@ function statusClass(status: string) {
     default:
       return 'bg-secondary text-primary'
   }
+}
+
+function formatPlatformFee(value: number, type: string) {
+  const amount = Number(value) || 0
+  return type === 'fixed' ? `₱${amount.toFixed(2)}` : `${amount}%`
+}
+
+function PlanPlatformFeesInfo({
+  fees,
+  compact = false,
+}: {
+  fees?: PlanPlatformFees | MerchantPlanSummary['platform_fees'] | null
+  compact?: boolean
+}) {
+  if (!fees) return null
+
+  const rows = [
+    { label: 'Tax', value: fees.tax, type: fees.tax_type },
+    { label: 'System', value: fees.system_fee, type: fees.system_fee_type },
+    { label: 'Other', value: fees.other_fee, type: fees.other_fee_type },
+  ]
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border border-primary/15 bg-secondary/40',
+        compact ? 'px-3 py-2.5' : 'px-3.5 py-3',
+      )}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+        Platform fee / transaction
+      </p>
+      <ul className="mt-2 grid gap-1 text-sm text-foreground sm:grid-cols-3">
+        {rows.map((row) => (
+          <li key={row.label}>
+            <span className="text-muted-foreground">{row.label}: </span>
+            <span className="font-semibold">
+              {formatPlatformFee(row.value, row.type)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Charged on every member transaction and billed with your next plan
+        payment.
+      </p>
+    </div>
+  )
 }
 
 function PlanFeatureList({ features }: { features: string[] }) {
@@ -106,6 +157,10 @@ function PlanCard({
       {plan.description ? (
         <p className="mt-3 text-sm text-muted-foreground">{plan.description}</p>
       ) : null}
+
+      <div className="mt-4">
+        <PlanPlatformFeesInfo fees={plan.platform_fees} compact />
+      </div>
 
       <div className="mt-4 flex-1 border-t border-border pt-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -275,7 +330,7 @@ export default function MerchantPlanPage() {
       (merchantAuthService.getMerchant()?.status ?? '').toLowerCase() ===
       'pending'
 
-    if (plan.monthly_fee <= 0) {
+    if ((plan.total_due ?? plan.monthly_fee) <= 0) {
       const ok = await dialog.confirm({
         title: isPending ? 'Activate free plan' : 'Activate free plan',
         message: isPending
@@ -404,6 +459,12 @@ export default function MerchantPlanPage() {
                 </p>
               ) : null}
 
+              {current?.platform_fees ? (
+                <div className="mt-4">
+                  <PlanPlatformFeesInfo fees={current.platform_fees} />
+                </div>
+              ) : null}
+
               {current ? (
                 <div className="mt-5 rounded-xl border border-border bg-white/80 p-4">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -434,7 +495,9 @@ export default function MerchantPlanPage() {
                       </h2>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Pay {billing.next_period_label} for your current plan
-                        through the platform PayMongo gateway.
+                        through the platform PayMongo gateway. Platform fees from
+                        member transactions are included with this next plan
+                        payment.
                       </p>
                       <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                         <div>
@@ -451,6 +514,12 @@ export default function MerchantPlanPage() {
                           </dt>
                           <dd className="mt-0.5 font-semibold text-foreground">
                             {billing.amount_label}
+                          </dd>
+                          <dd className="mt-1 text-xs text-muted-foreground">
+                            Plan {billing.plan_fee_label ?? '—'}
+                            {(billing.platform_commission ?? 0) > 0
+                              ? ` + commission ${billing.platform_commission_label}`
+                              : ''}
                           </dd>
                         </div>
                         <div>

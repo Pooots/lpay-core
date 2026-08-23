@@ -14,6 +14,7 @@ import { SuperAdminShell } from '@/components/admin/SuperAdminShell'
 import { useDialog } from '@/components/ui/AppDialog'
 import { platformSettingsService } from '@/services/platformSettingsService'
 import type {
+  CommissionType,
   CurrencyRateRow,
   GatewayRatesSettings,
   MerchantPlan,
@@ -769,6 +770,12 @@ function emptyPlanForm(): MerchantPlanPayload & {
     member_min: 1,
     member_max_input: '',
     monthly_fee: 0,
+    commission_tax: 0,
+    commission_tax_type: 'percentage',
+    commission_system_fee: 0,
+    commission_system_fee_type: 'fixed',
+    commission_other_fee: 0,
+    commission_other_fee_type: 'percentage',
     is_active: true,
     is_default: false,
     sort_order: 0,
@@ -802,6 +809,14 @@ function PlanSettingsTab() {
       member_max_input:
         editing.member_max === null ? '' : String(editing.member_max),
       monthly_fee: editing.monthly_fee,
+      commission_tax: editing.commission_tax ?? 0,
+      commission_tax_type: editing.commission_tax_type ?? 'percentage',
+      commission_system_fee: editing.commission_system_fee ?? 0,
+      commission_system_fee_type:
+        editing.commission_system_fee_type ?? 'fixed',
+      commission_other_fee: editing.commission_other_fee ?? 0,
+      commission_other_fee_type:
+        editing.commission_other_fee_type ?? 'percentage',
       is_active: editing.is_active,
       is_default: editing.is_default,
       sort_order: editing.sort_order,
@@ -828,6 +843,14 @@ function PlanSettingsTab() {
         member_min: Number(form.member_min) || 1,
         member_max: maxRaw === '' ? null : Number(maxRaw),
         monthly_fee: Number(form.monthly_fee) || 0,
+        commission_tax: Number(form.commission_tax) || 0,
+        commission_tax_type: form.commission_tax_type ?? 'percentage',
+        commission_system_fee: Number(form.commission_system_fee) || 0,
+        commission_system_fee_type:
+          form.commission_system_fee_type ?? 'fixed',
+        commission_other_fee: Number(form.commission_other_fee) || 0,
+        commission_other_fee_type:
+          form.commission_other_fee_type ?? 'percentage',
         is_active: Boolean(form.is_active),
         is_default: Boolean(form.is_default),
         sort_order: Number(form.sort_order) || 0,
@@ -880,7 +903,8 @@ function PlanSettingsTab() {
             <h2 className="text-lg font-bold text-foreground">Plan settings</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Create merchant plans with member capacity (e.g. 1–100, 101–500).
-              Assign a plan to each merchant from Merchant details.
+              Platform fees (tax, system, other) on member payments are set
+              here and applied from the merchant’s assigned plan.
             </p>
           </div>
           {editing ? (
@@ -984,6 +1008,81 @@ function PlanSettingsTab() {
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </label>
+          <div className="sm:col-span-2 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Platforms commission
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Applied to this plan’s member payments. Merchants inherit these
+                fees from their assigned plan.
+              </p>
+            </div>
+            <PlanFeeRow
+              label="Tax"
+              value={String(form.commission_tax ?? 0)}
+              type={form.commission_tax_type ?? 'percentage'}
+              onValueChange={(value) =>
+                setForm((f) => ({
+                  ...f,
+                  commission_tax: Number(value) || 0,
+                }))
+              }
+              onTypeChange={(type) =>
+                setForm((f) => ({ ...f, commission_tax_type: type }))
+              }
+            />
+            <PlanFeeRow
+              label="System fee"
+              value={String(form.commission_system_fee ?? 0)}
+              type={form.commission_system_fee_type ?? 'fixed'}
+              onValueChange={(value) =>
+                setForm((f) => ({
+                  ...f,
+                  commission_system_fee: Number(value) || 0,
+                }))
+              }
+              onTypeChange={(type) =>
+                setForm((f) => ({
+                  ...f,
+                  commission_system_fee_type: type,
+                }))
+              }
+            />
+            <PlanFeeRow
+              label="Other fee"
+              value={String(form.commission_other_fee ?? 0)}
+              type={form.commission_other_fee_type ?? 'percentage'}
+              onValueChange={(value) =>
+                setForm((f) => ({
+                  ...f,
+                  commission_other_fee: Number(value) || 0,
+                }))
+              }
+              onTypeChange={(type) =>
+                setForm((f) => ({
+                  ...f,
+                  commission_other_fee_type: type,
+                }))
+              }
+            />
+            <div className="rounded-xl border border-primary/15 bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
+              Example on a ₱1,000 payment:{' '}
+              <span className="font-semibold text-primary">
+                ₱
+                {planFeeExampleTotal(
+                  Number(form.commission_tax) || 0,
+                  form.commission_tax_type ?? 'percentage',
+                  Number(form.commission_system_fee) || 0,
+                  form.commission_system_fee_type ?? 'fixed',
+                  Number(form.commission_other_fee) || 0,
+                  form.commission_other_fee_type ?? 'percentage',
+                  1000,
+                ).toFixed(2)}
+              </span>{' '}
+              total platform fees
+            </div>
+          </div>
           <div className="block text-sm sm:col-span-2">
             <span className="mb-2 block font-medium text-foreground">
               Features
@@ -1077,12 +1176,13 @@ function PlanSettingsTab() {
           <p className="mt-6 text-sm text-muted-foreground">No plans yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <th className="pb-3 pr-4">Plan</th>
                   <th className="pb-3 pr-4">Members</th>
                   <th className="pb-3 pr-4">Fee</th>
+                  <th className="pb-3 pr-4">Platform fees</th>
                   <th className="pb-3 pr-4">Merchants</th>
                   <th className="pb-3 pr-4">Status</th>
                   <th className="pb-3 text-right">Actions</th>
@@ -1112,6 +1212,23 @@ function PlanSettingsTab() {
                     </td>
                     <td className="py-3.5 pr-4 font-medium">
                       {plan.monthly_fee_label}
+                    </td>
+                    <td className="py-3.5 pr-4 text-xs text-muted-foreground">
+                      <div>Tax {formatPlanFee(plan.commission_tax, plan.commission_tax_type)}</div>
+                      <div>
+                        System{' '}
+                        {formatPlanFee(
+                          plan.commission_system_fee,
+                          plan.commission_system_fee_type,
+                        )}
+                      </div>
+                      <div>
+                        Other{' '}
+                        {formatPlanFee(
+                          plan.commission_other_fee,
+                          plan.commission_other_fee_type,
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 pr-4">{plan.merchants_count}</td>
                     <td className="py-3.5 pr-4">
@@ -1176,6 +1293,88 @@ function PlanSettingsTab() {
         )}
       </div>
     </section>
+  )
+}
+
+function formatPlanFee(value: number | undefined, type: CommissionType | undefined) {
+  const amount = Number(value) || 0
+  return type === 'fixed' ? `₱${amount.toFixed(2)}` : `${amount}%`
+}
+
+function planFeeExampleTotal(
+  tax: number,
+  taxType: CommissionType,
+  systemFee: number,
+  systemType: CommissionType,
+  otherFee: number,
+  otherType: CommissionType,
+  baseAmount: number,
+) {
+  const calc = (value: number, type: CommissionType) =>
+    type === 'percentage' ? (baseAmount * value) / 100 : value
+
+  return (
+    calc(tax, taxType) + calc(systemFee, systemType) + calc(otherFee, otherType)
+  )
+}
+
+function PlanFeeRow({
+  label,
+  value,
+  type,
+  onValueChange,
+  onTypeChange,
+}: {
+  label: string
+  value: string
+  type: CommissionType
+  onValueChange: (value: string) => void
+  onTypeChange: (type: CommissionType) => void
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-[#fcfaff] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold text-foreground">{label}</p>
+        <div className="inline-flex rounded-xl border border-border bg-white p-1">
+          <button
+            type="button"
+            onClick={() => onTypeChange('fixed')}
+            className={cn(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+              type === 'fixed'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-primary',
+            )}
+          >
+            Fixed ₱
+          </button>
+          <button
+            type="button"
+            onClick={() => onTypeChange('percentage')}
+            className={cn(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+              type === 'percentage'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-primary',
+            )}
+          >
+            Percentage %
+          </button>
+        </div>
+      </div>
+      <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {type === 'fixed' ? `${label} amount (₱)` : `${label} rate (%)`}
+      </label>
+      <input
+        type="number"
+        min={0}
+        max={type === 'percentage' ? 100 : undefined}
+        step="0.01"
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+      />
+    </div>
   )
 }
 

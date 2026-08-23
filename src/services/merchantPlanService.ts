@@ -11,6 +11,16 @@ export type MerchantPlanCatalogItem = {
   member_range_label: string
   monthly_fee: number
   monthly_fee_label: string
+  platform_fees?: {
+    tax: number
+    tax_type: string
+    system_fee: number
+    system_fee_type: string
+    other_fee: number
+    other_fee_type: string
+  }
+  total_due: number
+  total_due_label: string
   features: string[]
   is_current: boolean
   is_upgrade: boolean
@@ -28,6 +38,10 @@ export type MerchantPlanPaymentRow = {
   from_plan_name: string | null
   to_plan_name: string | null
   to_plan_uuid: string
+  plan_fee?: number
+  plan_fee_label?: string
+  platform_commission?: number
+  platform_commission_label?: string
   amount: number
   amount_label: string
   currency: string
@@ -42,11 +56,38 @@ export type MerchantPlanPaymentRow = {
   created_label: string | null
 }
 
+export type MerchantPlanCommissionItem = {
+  uuid: string
+  reference_number: string
+  bill_number?: string | null
+  bill_title?: string | null
+  member_name?: string | null
+  account_number?: string | null
+  transaction_amount: number
+  transaction_amount_label: string
+  platform_tax: number
+  platform_tax_label: string
+  platform_system_fee: number
+  platform_system_fee_label: string
+  platform_other_fee: number
+  platform_other_fee_label: string
+  platform_fees_total: number
+  platform_fees_total_label: string
+  paid_at?: string | null
+  paid_label?: string | null
+}
+
 export type MerchantPlanBilling = {
   currency: string
   gateway: string
   gateway_label: string
   note: string
+  plan_fee?: number
+  plan_fee_label?: string
+  platform_commission?: number
+  platform_commission_label?: string
+  platform_commission_items?: MerchantPlanCommissionItem[]
+  platform_commission_count?: number
   amount: number
   amount_label: string
   next_period: string

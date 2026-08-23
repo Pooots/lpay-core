@@ -7,7 +7,6 @@ import { MerchantCodeQr } from '@/components/admin/MerchantCodeQr'
 import { BankDetailsPanel } from '@/components/admin/BankDetailsPanel'
 import { MerchantLogoUploader } from '@/components/admin/MerchantLogoUploader'
 import {
-  MerchantCommissionsPanel,
   MerchantPaymentGatewayPanel,
   MerchantPaymentMethodsPanel,
   MerchantRatesPanel,
@@ -32,7 +31,6 @@ type SettingsTab =
   | 'banks'
   | 'bills_set'
   | 'penalty'
-  | 'commissions'
   | 'payment_gateway'
   | 'payment_methods'
   | 'rates'
@@ -43,7 +41,6 @@ const TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: 'banks', label: 'Bank Details' },
   { id: 'bills_set', label: 'Bills Set' },
   { id: 'penalty', label: 'Penalty' },
-  { id: 'commissions', label: 'Commissions' },
   { id: 'payment_methods', label: 'Payment Method' },
   { id: 'rates', label: 'Rates' },
   { id: 'payment_gateway', label: 'Payment Gateway' },
@@ -68,7 +65,6 @@ export default function SettingsPage() {
   const banks = settingsQuery.data?.banks ?? []
   const billsSets = settingsQuery.data?.bills_sets ?? []
   const penalty = settingsQuery.data?.penalty
-  const commissions = settingsQuery.data?.commissions
   const paymentGateway = settingsQuery.data?.payment_gateway
   const paymentMethods = settingsQuery.data?.payment_methods ?? []
   const rates = settingsQuery.data?.rates
@@ -356,10 +352,6 @@ export default function SettingsPage() {
                     }}
                   />
                 </div>
-              ) : null}
-
-              {tab === 'commissions' && commissions ? (
-                <MerchantCommissionsPanel commissions={commissions} />
               ) : null}
 
               {tab === 'payment_gateway' && paymentGateway ? (

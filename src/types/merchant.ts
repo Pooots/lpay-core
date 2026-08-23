@@ -58,12 +58,6 @@ export type UpdateMerchantPayload = {
   status?: MerchantStatus
   settlement_frequency?: SettlementFrequency
   plan_uuid?: string | null
-  commission_tax?: number
-  commission_tax_type?: CommissionType
-  commission_system_fee?: number
-  commission_system_fee_type?: CommissionType
-  commission_other_fee?: number
-  commission_other_fee_type?: CommissionType
 }
 
 export type MerchantTransaction = {

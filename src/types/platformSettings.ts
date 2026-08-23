@@ -70,6 +70,15 @@ export type CurrencyConversionSettings = {
   updated_at: string | null
 }
 
+export type PlanPlatformFees = {
+  tax: number
+  tax_type: CommissionType
+  system_fee: number
+  system_fee_type: CommissionType
+  other_fee: number
+  other_fee_type: CommissionType
+}
+
 export type MerchantPlan = {
   uuid: string
   name: string
@@ -80,6 +89,15 @@ export type MerchantPlan = {
   member_range_label: string
   monthly_fee: number
   monthly_fee_label: string
+  commission_tax: number
+  commission_tax_type: CommissionType
+  commission_system_fee: number
+  commission_system_fee_type: CommissionType
+  commission_other_fee: number
+  commission_other_fee_type: CommissionType
+  platform_fees: PlanPlatformFees
+  total_due: number
+  total_due_label: string
   is_active: boolean
   is_default: boolean
   sort_order: number
@@ -96,6 +114,12 @@ export type MerchantPlanPayload = {
   member_min: number
   member_max?: number | null
   monthly_fee?: number
+  commission_tax?: number
+  commission_tax_type?: CommissionType
+  commission_system_fee?: number
+  commission_system_fee_type?: CommissionType
+  commission_other_fee?: number
+  commission_other_fee_type?: CommissionType
   is_active?: boolean
   is_default?: boolean
   sort_order?: number
